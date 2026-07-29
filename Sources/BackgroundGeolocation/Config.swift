@@ -112,7 +112,7 @@ public struct Config {
     public var locationAuthorizationAlert: [String: String]?
     /// Suppress the Settings-nudge alert driven by `locationAuthorizationAlert`. Default false.
     public var disableLocationAuthorizationAlert: Bool?
-    /// No-op on iOS; Android uses the OS permission rationale flow.
+    /// @unsupported No-op on iOS; Android uses the OS permission rationale flow.
     public var backgroundPermissionRationale: [String: String]?
     public var desiredAccuracy: Int?
     public var distanceFilter: Double?
