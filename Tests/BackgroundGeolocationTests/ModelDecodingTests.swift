@@ -1,0 +1,138 @@
+import XCTest
+@testable import BackgroundGeolocation
+
+final class ModelDecodingTests: XCTestCase {
+
+    /// A full Location payload in exactly the shape the engine emits.
+    private func locationDictionary() -> [String: Any] {
+        [
+            "uuid": "abc-123",
+            "timestamp": "2026-07-29T10:00:00.000Z",
+            "odometer": 1234.5,
+            "is_moving": true,
+            "coords": [
+                "latitude": 52.2297, "longitude": 21.0122, "accuracy": 12.0,
+                "altitude": 110.0, "altitude_accuracy": 3.0,
+                "speed": 4.2, "speed_accuracy": 0.5,
+                "heading": 91.0, "heading_accuracy": 2.0,
+                "ellipsoidal_altitude": 140.0,
+            ],
+            "activity": ["type": "in_vehicle", "confidence": 88],
+            "battery": ["level": 0.62, "is_charging": false],
+            "extras": ["watch": true],
+        ]
+    }
+
+    func testLocationDecodesEveryFieldIncludingSnakeCaseWireKeys() {
+        let location = Location(dictionary: locationDictionary())
+        XCTAssertNotNil(location)
+        XCTAssertEqual(location?.uuid, "abc-123")
+        XCTAssertEqual(location?.odometer, 1234.5)
+        XCTAssertEqual(location?.isMoving, true)
+        XCTAssertEqual(location?.coords.latitude, 52.2297)
+        XCTAssertEqual(location?.coords.altitudeAccuracy, 3.0)
+        XCTAssertEqual(location?.coords.speedAccuracy, 0.5)
+        XCTAssertEqual(location?.coords.headingAccuracy, 2.0)
+        XCTAssertEqual(location?.coords.ellipsoidalAltitude, 140.0)
+        XCTAssertEqual(location?.activity.type, .inVehicle)
+        XCTAssertEqual(location?.activity.confidence, 88)
+        XCTAssertEqual(location?.battery.level, 0.62)
+        XCTAssertEqual(location?.battery.isCharging, false)
+        XCTAssertEqual(location?.extras?["watch"] as? Bool, true)
+    }
+
+    func testLocationDecodesWithOnlyRequiredFields() {
+        var dictionary = locationDictionary()
+        dictionary["coords"] = ["latitude": 1.0, "longitude": 2.0, "accuracy": 3.0]
+        dictionary.removeValue(forKey: "extras")
+        let location = Location(dictionary: dictionary)
+        XCTAssertNotNil(location)
+        XCTAssertNil(location?.coords.altitude)
+        XCTAssertNil(location?.extras)
+    }
+
+    func testLocationDecodingFailsWhenARequiredFieldIsMissing() {
+        var dictionary = locationDictionary()
+        dictionary.removeValue(forKey: "uuid")
+        XCTAssertNil(Location(dictionary: dictionary))
+    }
+
+    func testMotionChangeAcceptsAbsentLocation() {
+        // Android omits `location` on the first motionchange of a session.
+        let event = MotionChangeEvent(dictionary: ["isMoving": true])
+        XCTAssertEqual(event?.isMoving, true)
+        XCTAssertNil(event?.location)
+    }
+
+    func testMotionChangeAcceptsNSNullLocation() {
+        // iOS sends NSNull in the same situation. This must not crash or fail.
+        let event = MotionChangeEvent(dictionary: ["isMoving": false, "location": NSNull()])
+        XCTAssertEqual(event?.isMoving, false)
+        XCTAssertNil(event?.location)
+    }
+
+    func testUnknownActivityTypeFallsBackToUnknownRatherThanFailing() {
+        let activity = MotionActivity(dictionary: ["type": "teleporting", "confidence": 10])
+        XCTAssertEqual(activity?.type, .unknown)
+    }
+
+    func testStateExposesTypedEnabledAndKeepsUnknownDiagnosticKeys() {
+        let state = State(dictionary: [
+            "enabled": true,
+            "odometer": 42.0,
+            "someFutureDiagnosticKey": 7,
+        ])
+        XCTAssertEqual(state?.enabled, true)
+        XCTAssertEqual(state?["odometer"] as? Double, 42.0)
+        XCTAssertEqual(state?["someFutureDiagnosticKey"] as? Int, 7)
+    }
+
+    func testGeofenceRoundTripsThroughItsDictionary() {
+        let geofence = Geofence(
+            identifier: "home", radius: 150, latitude: 52.0, longitude: 21.0,
+            notifyOnEntry: true, notifyOnExit: true, notifyOnDwell: false,
+            loiteringDelay: 30_000, extras: ["kind": "home"]
+        )
+        let decoded = Geofence(dictionary: geofence.toDictionary())
+        XCTAssertEqual(decoded?.identifier, "home")
+        XCTAssertEqual(decoded?.radius, 150)
+        XCTAssertEqual(decoded?.notifyOnDwell, false)
+        XCTAssertEqual(decoded?.loiteringDelay, 30_000)
+        XCTAssertEqual(decoded?.extras?["kind"] as? String, "home")
+    }
+
+    func testGeofenceDictionaryOmitsNilOptionals() {
+        let geofence = Geofence(identifier: "x", radius: 100, latitude: 0, longitude: 0)
+        let dictionary = geofence.toDictionary()
+        XCTAssertNil(dictionary["notifyOnEntry"])
+        XCTAssertNil(dictionary["loiteringDelay"])
+        XCTAssertNil(dictionary["extras"])
+    }
+
+    func testGeofenceEventDecodesItsAction() {
+        let event = GeofenceEvent(dictionary: [
+            "identifier": "home",
+            "action": "DWELL",
+            "location": locationDictionary(),
+        ])
+        XCTAssertEqual(event?.action, .dwell)
+        XCTAssertEqual(event?.identifier, "home")
+    }
+
+    func testProviderStateDecodesTypedEnums() {
+        let providerState = ProviderState(dictionary: [
+            "status": 3, "enabled": true, "gps": true, "network": false,
+            "accuracyAuthorization": 1,
+        ])
+        XCTAssertEqual(providerState?.status, .always)
+        XCTAssertEqual(providerState?.accuracyAuthorization, .reduced)
+        XCTAssertEqual(providerState?.network, false)
+    }
+
+    func testHttpEventDecodes() {
+        let event = HttpEvent(dictionary: ["success": false, "status": 0, "responseText": "offline"])
+        XCTAssertEqual(event?.success, false)
+        XCTAssertEqual(event?.status, 0)
+        XCTAssertEqual(event?.responseText, "offline")
+    }
+}
