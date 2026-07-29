@@ -297,7 +297,11 @@ public enum BackgroundGeolocation {
     /// An `AsyncStream` view over `hub.subscribe`, decoding each payload and
     /// dropping it (never crashing, never yielding a half-built model) if
     /// decoding fails.
-    private static func typedStream<T>(_ name: String, decode: @escaping ([String: Any]) -> T?) -> AsyncStream<T> {
+    ///
+    /// Not `private`: `BackgroundGeolocation+Geofences.swift` reuses this for
+    /// `geofenceEvents`/`geofenceChanges` rather than duplicating the
+    /// decode-or-drop `AsyncStream` wiring.
+    static func typedStream<T>(_ name: String, decode: @escaping ([String: Any]) -> T?) -> AsyncStream<T> {
         AsyncStream { continuation in
             let subscription = hub.subscribe(name) { dictionary in
                 if let value = decode(dictionary) {

@@ -157,8 +157,15 @@ final class FakeEngine: Engine {
     // MARK: - Upload queue
 
     var stubbedSyncQueue: [String: Any] = [:]
+    var syncQueueCallCount = 0
+    /// Invoked on each `syncQueue()` call, after the count is bumped but
+    /// before returning — lets a test simulate the queue draining so it can
+    /// prove the facade read `queuedLocations()` BEFORE calling this.
+    var onSyncQueue: (() -> Void)?
     func syncQueue() -> [String: Any] {
-        stubbedSyncQueue
+        syncQueueCallCount += 1
+        onSyncQueue?()
+        return stubbedSyncQueue
     }
 
     var stubbedQueuedLocations: [String: Any] = [:]
@@ -213,8 +220,13 @@ final class FakeEngine: Engine {
     }
 
     var flushLogsCallCount = 0
+    /// Invoked on each `flushLogs()` call — lets a test simulate the log
+    /// store draining so it can prove `uploadLog()` read `pendingLogCount()`
+    /// BEFORE calling this.
+    var onFlushLogs: (() -> Void)?
     func flushLogs() {
         flushLogsCallCount += 1
+        onFlushLogs?()
     }
 
     struct LogCall: Equatable {
