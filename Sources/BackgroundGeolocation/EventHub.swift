@@ -164,10 +164,17 @@ final class EventHub {
         }
     }
 
+    /// Detaches every current subscriber, but deliberately does NOT touch
+    /// `buffers` or `latchedNames`. `buffers` only ever holds entries for
+    /// names that have never been subscribed to (see `receive`'s
+    /// `latchedNames` check — a latched name is never buffered again), so it
+    /// already holds exactly the pre-subscribe buffer the latch exists to
+    /// protect. Clearing it here would let an app that calls
+    /// `removeListeners()` before its first `subscribe`/`stream` for a name
+    /// discard that name's launch-time buffer for good.
     func removeAll() {
         lock.lock()
         subscribers.removeAll()
-        buffers.removeAll()
         lock.unlock()
     }
 

@@ -21,7 +21,7 @@ extension BackgroundGeolocation {
     }
 
     public static func removeGeofence(identifier: String) async {
-        engine.removeGeofence(identifier)
+        _ = engine.removeGeofence(identifier)
     }
 
     public static func removeGeofences() async {
@@ -58,10 +58,14 @@ extension BackgroundGeolocation {
         }
     }
 
+    /// See `BackgroundGeolocation.locations` — each access mints a new
+    /// subscription; `AsyncStream` is single-consumer.
     public static var geofenceEvents: AsyncStream<GeofenceEvent> {
         typedStream("geofence", decode: GeofenceEvent.init(dictionary:))
     }
 
+    /// See `BackgroundGeolocation.locations` — each access mints a new
+    /// subscription; `AsyncStream` is single-consumer.
     public static var geofenceChanges: AsyncStream<GeofencesChangeEvent> {
         typedStream("geofenceschange", decode: GeofencesChangeEvent.init(dictionary:))
     }

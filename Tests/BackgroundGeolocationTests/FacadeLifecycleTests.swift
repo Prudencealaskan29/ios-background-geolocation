@@ -125,6 +125,52 @@ final class FacadeLifecycleTests: XCTestCase {
         XCTAssertEqual(received?.uuid, "sample-uuid")
     }
 
+    func testOnLocationErrorDeliversTheEnginesCodeAndMessage() {
+        // The engine's only way of reporting a bad license on `startWatch`,
+        // and every failed watch tick thereafter (`BGGeoEngine.mm:2653-2655`,
+        // `:2689`) — before this API existed, an app had no way to reach it.
+        var received: LocationErrorEvent?
+        _ = BackgroundGeolocation.onLocationError { received = $0 }
+        engine.emit("locationerror", ["code": "LICENSE_EXPIRED", "message": "Tracking is not licensed"])
+        XCTAssertEqual(received?.code, "LICENSE_EXPIRED")
+        XCTAssertEqual(received?.message, "Tracking is not licensed")
+    }
+
+    func testLocationErrorsStreamDecodesEventsAndUnsubscribesWhenItsTaskIsCancelled() async {
+        var received: LocationErrorEvent?
+        let task = Task {
+            for await event in BackgroundGeolocation.locationErrors {
+                received = event
+            }
+        }
+        await Task.yield()
+        engine.emit("locationerror", ["code": "408", "message": "no fix in 30s"])
+        await Task.yield()
+        XCTAssertEqual(received?.code, "408")
+
+        task.cancel()
+        await Task.yield()
+
+        XCTAssertEqual(BackgroundGeolocation.hub.subscriberCount(for: "locationerror"), 0)
+    }
+
+    func testOnLocationDeliversAnNSNullIsMovingPayloadRatherThanDroppingIt() {
+        // Regression for the cold-start probing window: the engine emits
+        // NSNull, not false, for `is_moving` while a session's first fixes
+        // are unconfirmed (`BGGeoEngine.mm:2826`) — up to 5 minutes after
+        // `start()` by default. Before the fix, this failed `Location`'s
+        // whole decode and `onLocation` silently dropped every one of these.
+        var payload = FakeEngine.sampleLocationDictionary
+        payload["is_moving"] = NSNull()
+
+        var received: Location?
+        _ = BackgroundGeolocation.onLocation { received = $0 }
+        engine.emit("location", payload)
+
+        XCTAssertNotNil(received, "an NSNull is_moving payload must be delivered, not dropped")
+        XCTAssertEqual(received?.isMoving, false)
+    }
+
     func testUndecodableEventPayloadIsDroppedNotCrashed() {
         var callCount = 0
         _ = BackgroundGeolocation.onLocation { _ in callCount += 1 }
@@ -164,6 +210,22 @@ final class FacadeLifecycleTests: XCTestCase {
         let accuracy = await BackgroundGeolocation.requestTemporaryFullAccuracy(purpose: "Trip")
         XCTAssertEqual(accuracy, .reduced)
         XCTAssertEqual(engine.requestTemporaryFullAccuracyPurposes, ["Trip"])
+    }
+
+    func testRequestTemporaryFullAccuracyResumesReducedIfCoreLocationNeverCompletes() async {
+        // The hazard this watchdog exists for: if `purpose` is missing from
+        // the app's NSLocationTemporaryUsageDescriptionDictionary, iOS may
+        // never invoke CoreLocation's completion at all
+        // (`react-native/src/index.ts:196-199`). Without a bound, this call
+        // would hang forever.
+        engine.completeRequestTemporaryFullAccuracy = false
+        let originalTimeout = BackgroundGeolocation.temporaryFullAccuracyTimeout
+        BackgroundGeolocation.temporaryFullAccuracyTimeout = 0.05
+        defer { BackgroundGeolocation.temporaryFullAccuracyTimeout = originalTimeout }
+
+        let accuracy = await BackgroundGeolocation.requestTemporaryFullAccuracy(purpose: "Trip")
+
+        XCTAssertEqual(accuracy, .reduced)
     }
 
     func testWatchPositionDelegatesOptionsToTheEngine() {

@@ -124,10 +124,16 @@ final class FakeEngine: Engine {
 
     var stubbedAccuracyAuthorization = 0
     var requestTemporaryFullAccuracyPurposes: [String] = []
+    /// Set `false` to simulate CoreLocation never invoking the completion —
+    /// the hazard `BackgroundGeolocation.requestTemporaryFullAccuracy`'s
+    /// watchdog exists to bound.
+    var completeRequestTemporaryFullAccuracy = true
     func requestTemporaryFullAccuracy(_ purpose: String,
                                       completion: @escaping (Int) -> Void) {
         requestTemporaryFullAccuracyPurposes.append(purpose)
-        completion(stubbedAccuracyAuthorization)
+        if completeRequestTemporaryFullAccuracy {
+            completion(stubbedAccuracyAuthorization)
+        }
     }
 
     var stubbedProviderState: [String: Any] = [:]

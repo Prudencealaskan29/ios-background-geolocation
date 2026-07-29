@@ -10,6 +10,13 @@ extension BackgroundGeolocation {
 
     /// Newest-first persisted log entries, capped to `1...5000`
     /// (`RNBackgroundGeolocation.mm:316-320`).
+    ///
+    /// `engine.logEntries(_:)` returns a BARE array (`BGGeoEngine.mm:703`) —
+    /// unlike the RN bridge, which wraps it in `{"entries": [...]}` only
+    /// because its codegen boundary needed an envelope
+    /// (`RNBackgroundGeolocation.mm:319`). Don't "fix" the missing unwrap
+    /// here when comparing against the RN reference; there is nothing to
+    /// unwrap on this platform.
     public static func getLog(limit: Int = 500) async -> [LogEntry] {
         let capped = min(max(limit, 1), 5000)
         return engine.logEntries(capped).compactMap(LogEntry.init(dictionary:))

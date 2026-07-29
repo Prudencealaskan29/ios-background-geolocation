@@ -82,6 +82,10 @@ public struct Location {
     public let sample: Bool?
     public let event: String?
     public let extras: [String: Any]?
+    /// The untouched native payload — permissive escape hatch for the next
+    /// field that surprises us, mirroring `State.raw` and Flutter's
+    /// `Location.raw` (`flutter/lib/src/models.dart:88`).
+    public let raw: [String: Any]
 
     public init?(dictionary: [String: Any]) {
         guard let uuid = dictionary.string("uuid"),
@@ -92,8 +96,7 @@ public struct Location {
               let activityDictionary = dictionary.dictionary("activity"),
               let activity = MotionActivity(dictionary: activityDictionary),
               let batteryDictionary = dictionary.dictionary("battery"),
-              let battery = Battery(dictionary: batteryDictionary),
-              let isMoving = dictionary.bool("is_moving") else {
+              let battery = Battery(dictionary: batteryDictionary) else {
             return nil
         }
         self.uuid = uuid
@@ -103,10 +106,18 @@ public struct Location {
         self.coords = coords
         self.activity = activity
         self.battery = battery
-        self.isMoving = isMoving
+        // The engine sends `NSNull` here — not `false` — while a cold-started
+        // session's first fixes are still in the "unconfirmed MOVING" probing
+        // window (`BGGeoEngine.mm:2826`, `:897`, `:1158`; up to 5 minutes by
+        // default). `bool()` returns nil for both a missing key and `NSNull`,
+        // so this must be coerced rather than required — Flutter does the
+        // same (`flutter/lib/src/models.dart:102`). Getting this wrong drops
+        // every location in that window.
+        self.isMoving = dictionary.bool("is_moving") ?? false
         self.sample = dictionary.bool("sample")
         self.event = dictionary.string("event")
         self.extras = dictionary.dictionary("extras")
+        self.raw = dictionary
     }
 }
 
@@ -185,7 +196,13 @@ public struct LogEntry {
     public let src: String
     public let event: String
     public let message: String?
-    public let data: String?
+    /// Whatever the caller passed to `Logger.error(_:data:)` etc. The engine
+    /// parses the JSON string it was written as back into an object before
+    /// returning it (`BGGeoEngine.mm:718-721`), so this is read straight off
+    /// the dictionary rather than re-decoded as a string — reading it with
+    /// `dictionary.string("data")` silently yields `nil` for every
+    /// well-formed entry.
+    public let data: Any?
 
     public init?(dictionary: [String: Any]) {
         guard let ts = dictionary.string("ts"),
@@ -199,7 +216,7 @@ public struct LogEntry {
         self.src = src
         self.event = event
         self.message = dictionary.string("message")
-        self.data = dictionary.string("data")
+        self.data = dictionary["data"]
     }
 }
 
@@ -294,6 +311,30 @@ public struct GeofencesChangeEvent {
         }
         self.on = onArray.compactMap { Geofence(dictionary: $0) }
         self.off = offArray.compactMap { Geofence(dictionary: $0) }
+    }
+}
+
+/// Emitted when the engine refuses (or fails) a location fix instead of
+/// resolving one — most notably `startWatch`'s only way of reporting a bad
+/// license (`BGGeoEngine.mm:2653-2655`) and every failed watch tick
+/// thereafter (`:2689`).
+///
+/// **`code` is `String`, not `Int`.** The engine emits `{code, message}`
+/// where `code` is the same family of string codes this facade already
+/// surfaces as `BGeoError.code` — `"LICENSE_EXPIRED"`, `"408"`, etc.
+/// `react-native/src/index.ts:44-51` reduces this to `Number(error.code)` for
+/// its legacy numeric-only `LocationErrorCallback` contract, but that
+/// coercion is lossy (`Number("LICENSE_EXPIRED")` is `NaN`) and this facade
+/// has no such legacy contract to match, so `code` stays a `String` here,
+/// consistent with `BGeoError`.
+public struct LocationErrorEvent {
+    public let code: String
+    public let message: String?
+
+    public init?(dictionary: [String: Any]) {
+        guard let code = dictionary.string("code") else { return nil }
+        self.code = code
+        self.message = dictionary.string("message")
     }
 }
 

@@ -57,6 +57,26 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertNil(Location(dictionary: dictionary))
     }
 
+    func testLocationDecodesWithNSNullIsMovingAsFalseRatherThanFailing() {
+        // The engine sends NSNull, not false, while a cold-started session's
+        // first fixes are still in the "unconfirmed MOVING" probing window
+        // (`BGGeoEngine.mm:2826`) — up to 5 minutes after `start()` by
+        // default. `is_moving` must coerce to `false`, not be required,
+        // or every location in that window fails to decode.
+        var dictionary = locationDictionary()
+        dictionary["is_moving"] = NSNull()
+        let location = Location(dictionary: dictionary)
+        XCTAssertNotNil(location, "an NSNull is_moving must not fail the whole decode")
+        XCTAssertEqual(location?.isMoving, false)
+    }
+
+    func testLocationRawExposesTheUntouchedPayload() {
+        let dictionary = locationDictionary()
+        let location = Location(dictionary: dictionary)
+        XCTAssertEqual(location?.raw["uuid"] as? String, "abc-123")
+        XCTAssertEqual(location?.raw["is_moving"] as? Bool, true)
+    }
+
     func testMotionChangeAcceptsAbsentLocation() {
         // Android omits `location` on the first motionchange of a session.
         let event = MotionChangeEvent(dictionary: ["isMoving": true])
@@ -145,6 +165,35 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(providerState.gps, false)
         XCTAssertEqual(providerState.network, false)
         XCTAssertNil(providerState.accuracyAuthorization)
+    }
+
+    func testLogEntryDataDecodesAsTheParsedObjectNotAString() throws {
+        // The engine JSON-parses the `data` string back into an object before
+        // returning it (`BGGeoEngine.mm:718-721`); reading it with
+        // `dictionary.string("data")` silently yields nil for every
+        // well-formed entry. A round-tripped dictionary must come back as a
+        // dictionary here, not nil.
+        let entry = LogEntry(dictionary: [
+            "ts": "2026-07-29T10:00:00.000Z",
+            "level": 3,
+            "src": "native",
+            "event": "app",
+            "data": ["reason": "test", "count": 2],
+        ])
+        XCTAssertNotNil(entry)
+        let data = try XCTUnwrap(entry?.data as? [String: Any])
+        XCTAssertEqual(data["reason"] as? String, "test")
+        XCTAssertEqual(data["count"] as? Int, 2)
+    }
+
+    func testLocationErrorEventDecodesCodeAndMessage() {
+        let event = LocationErrorEvent(dictionary: ["code": "LICENSE_EXPIRED", "message": "Tracking is not licensed"])
+        XCTAssertEqual(event?.code, "LICENSE_EXPIRED")
+        XCTAssertEqual(event?.message, "Tracking is not licensed")
+    }
+
+    func testLocationErrorEventRequiresCode() {
+        XCTAssertNil(LocationErrorEvent(dictionary: ["message": "no code"]))
     }
 
     func testHttpEventDecodes() {

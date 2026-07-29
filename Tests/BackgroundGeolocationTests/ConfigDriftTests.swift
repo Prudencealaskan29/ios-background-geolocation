@@ -16,6 +16,18 @@ final class ConfigDriftTests: XCTestCase {
             .deletingLastPathComponent()   // .../ios
             .deletingLastPathComponent()   // .../bgeo        <- the workspace root
             .appendingPathComponent("react-native/src/types.ts")
+
+        // `ios/` currently lives as a checkout alongside `react-native/` in
+        // the same private workspace. Once `ios/` becomes a standalone
+        // public repo (phase 2), this sibling won't exist on disk at all —
+        // skip rather than hard-fail so that split doesn't break every
+        // consumer's test run over a check that can no longer run as written.
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw XCTSkip("react-native/src/types.ts not found at \(url.path) — "
+                + "this drift check only works when ios/ and react-native/ are sibling "
+                + "checkouts in the same workspace; skipping rather than failing.")
+        }
+
         let source = try String(contentsOf: url, encoding: .utf8)
 
         guard let start = source.range(of: "export interface Config {") else {

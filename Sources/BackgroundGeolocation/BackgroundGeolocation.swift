@@ -116,15 +116,33 @@ public enum BackgroundGeolocation {
         return authorizationStatus
     }
 
+    /// `purpose` must be a key in the app's
+    /// `NSLocationTemporaryUsageDescriptionDictionary` (see the README's
+    /// Info.plist section). **CAUTION:** if it isn't, iOS may never invoke
+    /// CoreLocation's completion at all (`react-native/src/index.ts:196-199`
+    /// documents the same hazard) — this is the only bridged call in the
+    /// package the engine doesn't itself time out. `temporaryFullAccuracyTimeout`
+    /// below bounds the wait so the caller cannot hang forever; `ResumeGuard`
+    /// makes it safe if CoreLocation's completion arrives after the watchdog
+    /// already resumed.
     public static func requestTemporaryFullAccuracy(purpose: String) async -> AccuracyAuthorization {
         let accuracy = await withCheckedContinuation { (continuation: CheckedContinuation<Int, Never>) in
             let resumeGuard = ResumeGuard()
             engine.requestTemporaryFullAccuracy(purpose) { value in
                 resumeGuard.runOnce { continuation.resume(returning: value) }
             }
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(temporaryFullAccuracyTimeout * 1_000_000_000))
+                resumeGuard.runOnce { continuation.resume(returning: AccuracyAuthorization.reduced.rawValue) }
+            }
         }
         return AccuracyAuthorization(rawValue: accuracy) ?? .reduced
     }
+
+    /// Test seam: bounds the watchdog above, in seconds. Defaults to 30,
+    /// consistent with the engine's other timeouts; tests shrink this to
+    /// prove the watchdog actually fires without a real 30-second wait.
+    static var temporaryFullAccuracyTimeout: Double = 30
 
     public static func getProviderState() async -> ProviderState {
         ProviderState(dictionary: engine.providerState())
@@ -156,36 +174,59 @@ public enum BackgroundGeolocation {
     }
 
     // MARK: - Streams
+    //
+    // Every property below is computed: each access calls `typedStream`
+    // and mints a NEW subscription to the underlying event. `AsyncStream` is
+    // single-consumer, so `for await x in BackgroundGeolocation.locations`
+    // twice does not fan the same events out to both loops — it creates two
+    // independent subscriptions, and if you re-read the property mid-loop
+    // (rather than binding it to a `let` once) you silently start a second
+    // subscription and leak the first until its task is cancelled.
 
+    /// See the note above `// MARK: - Streams` — each access mints a new
+    /// subscription; bind the result to a `let` rather than re-reading this
+    /// property.
     public static var locations: AsyncStream<Location> {
         typedStream("location", decode: Location.init(dictionary:))
     }
 
+    /// See `locations`.
+    public static var locationErrors: AsyncStream<LocationErrorEvent> {
+        typedStream("locationerror", decode: LocationErrorEvent.init(dictionary:))
+    }
+
+    /// See `locations`.
     public static var motionChanges: AsyncStream<MotionChangeEvent> {
         typedStream("motionchange", decode: MotionChangeEvent.init(dictionary:))
     }
 
+    /// See `locations`.
     public static var providerChanges: AsyncStream<ProviderChangeEvent> {
         // ProviderChangeEvent (= ProviderState) is non-failable — never dropped.
         typedStream("providerchange") { ProviderChangeEvent(dictionary: $0) }
     }
 
+    /// See `locations`.
     public static var heartbeats: AsyncStream<HeartbeatEvent> {
         typedStream("heartbeat", decode: HeartbeatEvent.init(dictionary:))
     }
 
+    /// See `locations`.
     public static var httpEvents: AsyncStream<HttpEvent> {
         typedStream("http", decode: HttpEvent.init(dictionary:))
     }
 
+    /// See `locations`.
     public static var connectivityChanges: AsyncStream<ConnectivityChangeEvent> {
         typedStream("connectivitychange", decode: ConnectivityChangeEvent.init(dictionary:))
     }
 
+    /// See `locations`.
     public static var powerSaveChanges: AsyncStream<Bool> {
         typedStream("powersavechange", decode: { $0.bool("isPowerSaveMode") })
     }
 
+    /// See `locations`.
     public static var authorizationEvents: AsyncStream<[String: Any]> {
         typedStream("authorization", decode: { $0 })
     }
@@ -197,6 +238,17 @@ public enum BackgroundGeolocation {
         hub.subscribe("location") { dictionary in
             if let location = Location(dictionary: dictionary) {
                 handler(location)
+            }
+        }
+    }
+
+    /// The only way to learn `startWatch` refused a bad license, or that a
+    /// watch tick failed — see `LocationErrorEvent`'s doc comment.
+    @discardableResult
+    public static func onLocationError(_ handler: @escaping (LocationErrorEvent) -> Void) -> Subscription {
+        hub.subscribe("locationerror") { dictionary in
+            if let event = LocationErrorEvent(dictionary: dictionary) {
+                handler(event)
             }
         }
     }

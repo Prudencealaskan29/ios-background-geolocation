@@ -51,6 +51,22 @@ Example:
 </array>
 ```
 
+If you call `requestTemporaryFullAccuracy(purpose:)`, you additionally need
+`NSLocationTemporaryUsageDescriptionDictionary`, with `purpose` matching one
+of its keys:
+
+| Key | Purpose |
+| --- | --- |
+| `NSLocationTemporaryUsageDescriptionDictionary` | Per-`purpose` strings shown in the temporary-precise-accuracy prompt. **If `purpose` isn't a key here, iOS may never invoke the completion at all** — `requestTemporaryFullAccuracy` bounds this with a 30-second watchdog rather than hanging forever, but the call is still meant to be answered, not timed out. |
+
+```xml
+<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+<dict>
+    <key>Trip</key>
+    <string>Precise location improves your trip route.</string>
+</dict>
+```
+
 ## Licence key
 
 The licence key is **not** a `Config` option. Set it in your app's

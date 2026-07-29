@@ -145,6 +145,7 @@ final class PublicSurfaceTests: XCTestCase {
         XCTAssertEqual(location?.activity.type, .inVehicle)
         XCTAssertEqual(location?.battery.level, 0.62)
         XCTAssertEqual(location?.extras?["watch"] as? Bool, true)
+        XCTAssertEqual(location?.raw["uuid"] as? String, "abc-123")
     }
 
     func testGeofencePublicInits() {
@@ -189,7 +190,7 @@ final class PublicSurfaceTests: XCTestCase {
         XCTAssertEqual(entry?.src, "native")
         XCTAssertEqual(entry?.event, "app")
         XCTAssertEqual(entry?.message, "hello")
-        XCTAssertEqual(entry?.data, "{}")
+        XCTAssertEqual(entry?.data as? String, "{}")
     }
 
     func testProviderStateAndItsTypealiasEventPublicInit() {
@@ -244,6 +245,12 @@ final class PublicSurfaceTests: XCTestCase {
         ])
         XCTAssertEqual(event?.on.map(\.identifier), ["on"])
         XCTAssertEqual(event?.off.map(\.identifier), ["off"])
+    }
+
+    func testLocationErrorEventPublicInit() {
+        let event = LocationErrorEvent(dictionary: ["code": "LICENSE_EXPIRED", "message": "Tracking is not licensed"])
+        XCTAssertEqual(event?.code, "LICENSE_EXPIRED")
+        XCTAssertEqual(event?.message, "Tracking is not licensed")
     }
 
     func testHttpEventPublicInit() {

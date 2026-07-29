@@ -151,6 +151,23 @@ final class EventHubTests: XCTestCase {
         XCTAssertEqual(hub.subscriberCount(for: "location"), 0)
     }
 
+    func testRemoveAllDoesNotDiscardTheBufferForANameThatWasNeverSubscribedTo() {
+        // Regression: `removeAll()` used to clear `buffers` unconditionally,
+        // so an app calling `removeListeners()` before its first subscribe
+        // discarded the launch-time buffer the latch exists to protect.
+        let engine = FakeEngine()
+        let hub = EventHub()
+        hub.attach(to: engine)
+
+        engine.emit("location", ["uuid": "buffered-before-removeAll"])
+        hub.removeAll()
+
+        var received: [String] = []
+        _ = hub.subscribe("location") { received.append($0["uuid"] as? String ?? "") }
+
+        XCTAssertEqual(received, ["buffered-before-removeAll"])
+    }
+
     func testBufferDoesNotReArmOnceLatchedEvenAfterEverySubscriberIsRemoved() {
         let engine = FakeEngine()
         let hub = EventHub()
