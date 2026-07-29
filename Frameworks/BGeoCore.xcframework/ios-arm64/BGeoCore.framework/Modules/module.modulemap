@@ -1,0 +1,10 @@
+framework module BGeoCore {
+  umbrella header "BGeoCore.h"
+  export *
+
+  module * { export * }
+}
+
+module BGeoCore.Swift {
+  header "BGeoCore-Swift.h"
+}
