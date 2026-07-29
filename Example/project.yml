@@ -29,3 +29,27 @@ targets:
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGNING_ALLOWED: NO
+  BGeoExampleTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: BGeoExample
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bgeo.example.tests
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+schemes:
+  BGeoExample:
+    build:
+      targets:
+        BGeoExample: all
+        BGeoExampleTests: [test]
+    test:
+      targets:
+        - BGeoExampleTests

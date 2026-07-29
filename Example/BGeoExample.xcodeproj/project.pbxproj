@@ -9,13 +9,30 @@
 /* Begin PBXBuildFile section */
 		01EB6FEA28B68E4FC7A5615A /* BackgroundGeolocation in Frameworks */ = {isa = PBXBuildFile; productRef = F02F6E4D458B021B98255541 /* BackgroundGeolocation */; };
 		23107B14C35308D53C827252 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7EF06EE3330294C23DD6490 /* ContentView.swift */; };
+		5BA63FE49AFC6376105FCAB4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25EA6ACFEA6AC88E3C65DE9A /* AppStore.swift */; };
+		8AD222BC1134358F17F14DF6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD23A5C6A47FF432665986D /* Theme.swift */; };
+		EC2B410F62061A94CA0D9DE0 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */; };
 		F930D7CBBA4ED50B7BF38006 /* BGeoExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026A73101B563753C08511F5 /* BGeoExampleApp.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		D8F05860B94C2C30523DCD1E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D98A4C474EEAA45BD7F7BEF7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 460ECD1DD6D37DC8D2AE3BE4;
+			remoteInfo = BGeoExample;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		026A73101B563753C08511F5 /* BGeoExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BGeoExampleApp.swift; sourceTree = "<group>"; };
+		25EA6ACFEA6AC88E3C65DE9A /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		3FDFD0CBB7BC98EC2D66F5E1 /* BGeoExampleTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BGeoExampleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4E5419E957991124AF1F97CE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
 		951D7998779736CA135F00A0 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = ..; sourceTree = SOURCE_ROOT; };
+		ACD23A5C6A47FF432665986D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		B328A65815E7DB66228D795D /* BGeoExample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BGeoExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E7EF06EE3330294C23DD6490 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -32,10 +49,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1C46F873B2EB0BD7AC8410FB /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
 		47C88D2991FC3284971C4DCC /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				B328A65815E7DB66228D795D /* BGeoExample.app */,
+				3FDFD0CBB7BC98EC2D66F5E1 /* BGeoExampleTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -45,6 +71,7 @@
 			children = (
 				C13861EEECECE47A506AC07F /* Packages */,
 				DDDD8C926E0A0DF2A6525DE6 /* Sources */,
+				1C46F873B2EB0BD7AC8410FB /* Tests */,
 				47C88D2991FC3284971C4DCC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -60,9 +87,11 @@
 		DDDD8C926E0A0DF2A6525DE6 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				25EA6ACFEA6AC88E3C65DE9A /* AppStore.swift */,
 				026A73101B563753C08511F5 /* BGeoExampleApp.swift */,
 				E7EF06EE3330294C23DD6490 /* ContentView.swift */,
 				4E5419E957991124AF1F97CE /* Info.plist */,
+				ACD23A5C6A47FF432665986D /* Theme.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -70,6 +99,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		3A921EA490CEE21ED30F721A /* BGeoExampleTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8778F546A5F3D86DBCC7D7C1 /* Build configuration list for PBXNativeTarget "BGeoExampleTests" */;
+			buildPhases = (
+				3F6C55C0ECCD5875971BA72E /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA425656D868561647EEEBB9 /* PBXTargetDependency */,
+			);
+			name = BGeoExampleTests;
+			packageProductDependencies = (
+			);
+			productName = BGeoExampleTests;
+			productReference = 3FDFD0CBB7BC98EC2D66F5E1 /* BGeoExampleTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		460ECD1DD6D37DC8D2AE3BE4 /* BGeoExample */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 95639E09680F3EDAAE5CBEC0 /* Build configuration list for PBXNativeTarget "BGeoExample" */;
@@ -118,21 +165,40 @@
 			projectRoot = "";
 			targets = (
 				460ECD1DD6D37DC8D2AE3BE4 /* BGeoExample */,
+				3A921EA490CEE21ED30F721A /* BGeoExampleTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3F6C55C0ECCD5875971BA72E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EC2B410F62061A94CA0D9DE0 /* AppStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F32F171978A11F26B159D43A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5BA63FE49AFC6376105FCAB4 /* AppStore.swift in Sources */,
 				F930D7CBBA4ED50B7BF38006 /* BGeoExampleApp.swift in Sources */,
 				23107B14C35308D53C827252 /* ContentView.swift in Sources */,
+				8AD222BC1134358F17F14DF6 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AA425656D868561647EEEBB9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 460ECD1DD6D37DC8D2AE3BE4 /* BGeoExample */;
+			targetProxy = D8F05860B94C2C30523DCD1E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		176F2F649E17166291DBAA7A /* Debug */ = {
@@ -195,6 +261,26 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		26C17B0C8B404DBE8A8CE6CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bgeo.example.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BGeoExample.app/BGeoExample";
 			};
 			name = Debug;
 		};
@@ -296,6 +382,26 @@
 			};
 			name = Release;
 		};
+		ECF67AC8CF3F6C2F4911004E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bgeo.example.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BGeoExample.app/BGeoExample";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -304,6 +410,15 @@
 			buildConfigurations = (
 				176F2F649E17166291DBAA7A /* Debug */,
 				C97025F1A1F075D2F9B114A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8778F546A5F3D86DBCC7D7C1 /* Build configuration list for PBXNativeTarget "BGeoExampleTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				26C17B0C8B404DBE8A8CE6CD /* Debug */,
+				ECF67AC8CF3F6C2F4911004E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
