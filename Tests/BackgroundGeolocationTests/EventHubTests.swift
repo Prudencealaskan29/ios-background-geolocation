@@ -142,10 +142,15 @@ final class EventHubTests: XCTestCase {
         hub.attach(to: engine)
 
         let stream = hub.stream("location")
+        // `hub.stream(_:)` subscribes synchronously in `AsyncStream`'s build
+        // closure (it runs eagerly at construction, not lazily on first
+        // iteration) — the subscription already exists here, before `task`
+        // is even created, so no wait is needed before cancelling.
         let task = Task { for await _ in stream {} }
-        await Task.yield()
         task.cancel()
-        await Task.yield()
+        await pollUntil("cancellation unsubscribes from the hub") {
+            hub.subscriberCount(for: "location") == 0
+        }
 
         engine.emit("location", [:])
         XCTAssertEqual(hub.subscriberCount(for: "location"), 0)

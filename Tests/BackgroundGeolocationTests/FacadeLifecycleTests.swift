@@ -158,13 +158,19 @@ final class FacadeLifecycleTests: XCTestCase {
                 received = event
             }
         }
-        await Task.yield()
+        await pollUntil("the stream task registers its subscription") {
+            BackgroundGeolocation.hub.subscriberCount(for: "locationerror") == 1
+        }
         engine.emit("locationerror", ["code": "408", "message": "no fix in 30s"])
-        await Task.yield()
+        await pollUntil("the consuming task receives the emitted event") {
+            received != nil
+        }
         XCTAssertEqual(received?.code, "408")
 
         task.cancel()
-        await Task.yield()
+        await pollUntil("cancellation unsubscribes from the hub") {
+            BackgroundGeolocation.hub.subscriberCount(for: "locationerror") == 0
+        }
 
         XCTAssertEqual(BackgroundGeolocation.hub.subscriberCount(for: "locationerror"), 0)
     }
@@ -269,13 +275,19 @@ final class FacadeLifecycleTests: XCTestCase {
                 received = location
             }
         }
-        await Task.yield()
+        await pollUntil("the stream task registers its subscription") {
+            BackgroundGeolocation.hub.subscriberCount(for: "location") == 1
+        }
         engine.emit("location", FakeEngine.sampleLocationDictionary)
-        await Task.yield()
+        await pollUntil("the consuming task receives the emitted event") {
+            received != nil
+        }
         XCTAssertEqual(received?.uuid, "sample-uuid")
 
         task.cancel()
-        await Task.yield()
+        await pollUntil("cancellation unsubscribes from the hub") {
+            BackgroundGeolocation.hub.subscriberCount(for: "location") == 0
+        }
 
         XCTAssertEqual(BackgroundGeolocation.hub.subscriberCount(for: "location"), 0)
     }
