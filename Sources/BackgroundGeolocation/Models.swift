@@ -316,24 +316,46 @@ public struct GeofencesChangeEvent {
 
 /// Emitted when the engine refuses (or fails) a location fix instead of
 /// resolving one — most notably `startWatch`'s only way of reporting a bad
-/// license (`BGGeoEngine.mm:2653-2655`) and every failed watch tick
-/// thereafter (`:2689`).
+/// license (`BGGeoEngine.mm:2653-2655`), every failed watch tick thereafter
+/// (`:2689`), and every ordinary CoreLocation failure during tracking
+/// (`:1308`) — the common case this event exists to report.
 ///
-/// **`code` is `String`, not `Int`.** The engine emits `{code, message}`
-/// where `code` is the same family of string codes this facade already
-/// surfaces as `BGeoError.code` — `"LICENSE_EXPIRED"`, `"408"`, etc.
+/// **`code` is `String`, not `Int`.** The wire value is one of two different
+/// types depending on the call site — a raw CLError `NSNumber` from
+/// CoreLocation failures, or a `String` (`"LICENSE_EXPIRED"`, `"408"`, etc.)
+/// from the license/watch-tick paths — and the initialiser normalises both
+/// to `String`; see its doc comment for why neither `Int` alone nor
+/// `string("code")` alone would work. A `String` also keeps this consistent
+/// with `BGeoError.code`, which surfaces the same family of string codes.
 /// `react-native/src/index.ts:44-51` reduces this to `Number(error.code)` for
 /// its legacy numeric-only `LocationErrorCallback` contract, but that
 /// coercion is lossy (`Number("LICENSE_EXPIRED")` is `NaN`) and this facade
-/// has no such legacy contract to match, so `code` stays a `String` here,
-/// consistent with `BGeoError`.
+/// has no such legacy contract to match.
 public struct LocationErrorEvent {
     public let code: String
     public let message: String?
 
     public init?(dictionary: [String: Any]) {
-        guard let code = dictionary.string("code") else { return nil }
-        self.code = code
+        // `code` arrives as one of TWO different wire types depending on
+        // which engine call site emitted it:
+        //   - `BGGeoEngine.mm:1308` — an NSNumber (the raw CLError code) on
+        //     every ordinary CoreLocation failure, which is the common case
+        //     this event exists to report.
+        //   - `BGGeoEngine.mm:2654`/`:2689` — a String (`"LICENSE_EXPIRED"`,
+        //     `"408"`, etc.) on the license-refusal and watch-tick-failure
+        //     paths.
+        // Reading this with `dictionary.string("code")` alone — `as? String`
+        // — is nil for the NSNumber case, so it silently drops every
+        // CoreLocation failure while still decoding the license/watch-tick
+        // ones. Do NOT "simplify" this back to `string("code")`.
+        switch dictionary["code"] {
+        case let number as NSNumber:
+            self.code = number.stringValue
+        case let string as String:
+            self.code = string
+        default:
+            return nil
+        }
         self.message = dictionary.string("message")
     }
 }

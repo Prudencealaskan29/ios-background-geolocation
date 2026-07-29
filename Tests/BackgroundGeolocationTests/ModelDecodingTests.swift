@@ -186,10 +186,23 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(data["count"] as? Int, 2)
     }
 
-    func testLocationErrorEventDecodesCodeAndMessage() {
+    func testLocationErrorEventDecodesAStringCode() {
+        // The license-refusal (BGGeoEngine.mm:2654) and watch-tick-failure
+        // (:2689) paths emit `code` as a String.
         let event = LocationErrorEvent(dictionary: ["code": "LICENSE_EXPIRED", "message": "Tracking is not licensed"])
         XCTAssertEqual(event?.code, "LICENSE_EXPIRED")
         XCTAssertEqual(event?.message, "Tracking is not licensed")
+    }
+
+    func testLocationErrorEventDecodesAnNSNumberCodeAsItsIntegerString() {
+        // Regression: ordinary CoreLocation failures (BGGeoEngine.mm:1308)
+        // emit `code` as an NSNumber (the raw CLError code), not a String.
+        // `dictionary.string("code")` alone — `as? String` — is nil for an
+        // NSNumber, so this used to silently drop every one of these, which
+        // is the common case this event exists to report.
+        let event = LocationErrorEvent(dictionary: ["code": 1 as NSNumber, "message": "denied"])
+        XCTAssertEqual(event?.code, "1")
+        XCTAssertEqual(event?.message, "denied")
     }
 
     func testLocationErrorEventRequiresCode() {

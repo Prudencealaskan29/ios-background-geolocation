@@ -136,6 +136,21 @@ final class FacadeLifecycleTests: XCTestCase {
         XCTAssertEqual(received?.message, "Tracking is not licensed")
     }
 
+    func testOnLocationErrorDeliversAnNSNumberCodedCoreLocationFailureRatherThanDroppingIt() {
+        // Regression, same shape as the is_moving/NSNull bug: ordinary
+        // CoreLocation failures (BGGeoEngine.mm:1308) emit `code` as an
+        // NSNumber, not a String. Before the fix this decoded to nil and
+        // onLocationError silently dropped every one of these — the common
+        // case the event exists to report — while still delivering the rarer
+        // license/watch-tick String-coded ones.
+        var received: LocationErrorEvent?
+        _ = BackgroundGeolocation.onLocationError { received = $0 }
+        engine.emit("locationerror", ["code": 1 as NSNumber, "message": "denied", "recovering": true])
+        XCTAssertNotNil(received, "an NSNumber-coded locationerror payload must be delivered, not dropped")
+        XCTAssertEqual(received?.code, "1")
+        XCTAssertEqual(received?.message, "denied")
+    }
+
     func testLocationErrorsStreamDecodesEventsAndUnsubscribesWhenItsTaskIsCancelled() async {
         var received: LocationErrorEvent?
         let task = Task {
