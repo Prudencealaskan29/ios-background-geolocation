@@ -1,0 +1,31 @@
+# xcodegen spec for the BGeoExample console app.
+# Regenerate the project after changing this file:  xcodegen generate
+name: BGeoExample
+options:
+  deploymentTarget:
+    iOS: "15.5"
+  createIntermediateGroups: true
+packages:
+  BackgroundGeolocation:
+    path: ../
+targets:
+  BGeoExample:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    dependencies:
+      - package: BackgroundGeolocation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bgeo.example
+        INFOPLIST_FILE: Sources/Info.plist
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # No provisioning profile in this checkout; keep simulator builds
+        # working without a signing team.
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO

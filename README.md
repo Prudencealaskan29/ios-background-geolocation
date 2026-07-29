@@ -113,6 +113,12 @@ for await location in BackgroundGeolocation.locations {
 `Subscription` you hold onto and call `.remove()` on to unsubscribe) for code
 that isn't structured around async sequences.
 
+## Example app
+
+`Example/` is a console app that depends on this package by local path and
+exercises the SDK on a real device. See `Example/project.yml` (regenerate
+the Xcode project with `xcodegen generate` after changing it).
+
 ## Running the tests
 
 The vendored `BGeoCore.xcframework` is iOS-only, so **`swift test` does not
