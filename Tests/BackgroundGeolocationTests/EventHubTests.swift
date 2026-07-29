@@ -150,4 +150,22 @@ final class EventHubTests: XCTestCase {
         engine.emit("location", [:])
         XCTAssertEqual(hub.subscriberCount(for: "location"), 0)
     }
+
+    func testBufferDoesNotReArmOnceLatchedEvenAfterEverySubscriberIsRemoved() {
+        let engine = FakeEngine()
+        let hub = EventHub()
+        hub.attach(to: engine)
+
+        var firstReceived = 0
+        let subscription = hub.subscribe("location") { _ in firstReceived += 1 }
+        subscription.remove()
+
+        engine.emit("location", ["uuid": "late"])
+
+        var secondReceived = 0
+        _ = hub.subscribe("location") { _ in secondReceived += 1 }
+
+        XCTAssertEqual(firstReceived, 0)
+        XCTAssertEqual(secondReceived, 0, "the buffer must not re-arm once it has latched, even with zero current subscribers")
+    }
 }
