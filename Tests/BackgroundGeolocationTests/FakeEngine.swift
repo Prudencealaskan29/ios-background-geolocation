@@ -1,11 +1,35 @@
 import Foundation
 @testable import BackgroundGeolocation
 
+/// A tiny stand-in for `Result` whose failure case is the engine's raw
+/// `(code, message)` reject pair. `Result`'s `Failure` must conform to
+/// `Error`, which a plain tuple cannot — hence this instead of `Result`.
+enum EngineOutcome<Success> {
+    case success(Success)
+    case failure((String, String))
+}
+
 /// Test double for `Engine`. Records every call it receives and lets tests
 /// drive `eventEmitter` directly via `emit(_:_:)`. Used by the `EventHub`
 /// tests in this task, and by the facade tests in later tasks.
 @MainActor
 final class FakeEngine: Engine {
+
+    /// A full `Location` payload in exactly the shape the engine emits —
+    /// shared by every facade test that needs a decodable fix.
+    static let sampleLocationDictionary: [String: Any] = [
+        "uuid": "sample-uuid",
+        "timestamp": "2026-01-01T00:00:00.000Z",
+        "odometer": 12.5,
+        "is_moving": false,
+        "coords": [
+            "latitude": 1.0,
+            "longitude": 2.0,
+            "accuracy": 5.0,
+        ],
+        "activity": ["type": "still", "confidence": 100],
+        "battery": ["level": 0.5, "is_charging": false],
+    ]
 
     // MARK: - eventEmitter
 
@@ -54,26 +78,24 @@ final class FakeEngine: Engine {
         stopTrackingCallCount += 1
     }
 
-    var stubbedChangePace = true
+    var stubbedChangePaceResult = true
     var changePaceCalls: [Bool] = []
     func changePace(_ isMoving: Bool) -> Bool {
         changePaceCalls.append(isMoving)
-        return stubbedChangePace
+        return stubbedChangePaceResult
     }
 
     // MARK: - Single-shot / watch
 
-    var stubbedCurrentPosition: [String: Any] = [:]
-    var stubbedCurrentPositionError: (String, String)?
+    var stubbedCurrentPosition: EngineOutcome<[String: Any]> = .success([:])
     var getCurrentPositionOptions: [[String: Any]] = []
     func getCurrentPosition(_ options: [String: Any],
                             resolve: @escaping ([String: Any]) -> Void,
                             reject: @escaping (String, String) -> Void) {
         getCurrentPositionOptions.append(options)
-        if let error = stubbedCurrentPositionError {
-            reject(error.0, error.1)
-        } else {
-            resolve(stubbedCurrentPosition)
+        switch stubbedCurrentPosition {
+        case .success(let location): resolve(location)
+        case .failure(let error): reject(error.0, error.1)
         }
     }
 
@@ -89,16 +111,14 @@ final class FakeEngine: Engine {
 
     // MARK: - Permission / provider
 
-    var stubbedPermissionStatus = 0
-    var stubbedPermissionError: (String, String)?
+    var stubbedPermission: EngineOutcome<Int> = .success(0)
     var requestPermissionCallCount = 0
     func requestPermission(resolve: @escaping (Int) -> Void,
                            reject: @escaping (String, String) -> Void) {
         requestPermissionCallCount += 1
-        if let error = stubbedPermissionError {
-            reject(error.0, error.1)
-        } else {
-            resolve(stubbedPermissionStatus)
+        switch stubbedPermission {
+        case .success(let status): resolve(status)
+        case .failure(let error): reject(error.0, error.1)
         }
     }
 
@@ -122,17 +142,15 @@ final class FakeEngine: Engine {
 
     // MARK: - Odometer
 
-    var stubbedSetOdometerResult: [String: Any] = [:]
-    var stubbedSetOdometerError: (String, String)?
+    var stubbedSetOdometer: EngineOutcome<[String: Any]> = .success([:])
     var setOdometerValues: [Double] = []
     func setOdometer(_ value: Double,
                      resolve: @escaping ([String: Any]) -> Void,
                      reject: @escaping (String, String) -> Void) {
         setOdometerValues.append(value)
-        if let error = stubbedSetOdometerError {
-            reject(error.0, error.1)
-        } else {
-            resolve(stubbedSetOdometerResult)
+        switch stubbedSetOdometer {
+        case .success(let location): resolve(location)
+        case .failure(let error): reject(error.0, error.1)
         }
     }
 
