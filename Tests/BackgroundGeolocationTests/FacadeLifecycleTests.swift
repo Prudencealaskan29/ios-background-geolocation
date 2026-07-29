@@ -139,4 +139,67 @@ final class FacadeLifecycleTests: XCTestCase {
         engine.emit("powersavechange", ["isPowerSaveMode": true])
         XCTAssertEqual(received, true)
     }
+
+    func testReadyAttachesTheHubSoLaunchTimeEventsAreBufferedForLateSubscribers() async throws {
+        // Reproduce the state a genuinely untouched engine/hub pair would be
+        // in — the engine's `eventEmitter` slot is nil until something reads
+        // `hub` — by undoing `setUp`'s manual attach.
+        engine.eventEmitter = nil
+        BackgroundGeolocation.hub = EventHub()
+        engine.stubbedState = ["enabled": false]
+
+        _ = try await BackgroundGeolocation.ready(Config())
+
+        // Without `ready()` attaching the hub, this emit would have nowhere
+        // to go and the event would be lost forever, not buffered.
+        engine.emit("authorization", ["source": "launch"])
+
+        var received: [String: Any]?
+        _ = BackgroundGeolocation.onAuthorization { received = $0 }
+        XCTAssertEqual(received?["source"] as? String, "launch")
+    }
+
+    func testRequestTemporaryFullAccuracyMapsTheNumericAccuracy() async {
+        engine.stubbedAccuracyAuthorization = 1
+        let accuracy = await BackgroundGeolocation.requestTemporaryFullAccuracy(purpose: "Trip")
+        XCTAssertEqual(accuracy, .reduced)
+        XCTAssertEqual(engine.requestTemporaryFullAccuracyPurposes, ["Trip"])
+    }
+
+    func testWatchPositionDelegatesOptionsToTheEngine() {
+        BackgroundGeolocation.watchPosition(WatchPositionOptions(interval: 5))
+        XCTAssertEqual(engine.startWatchOptions.count, 1)
+        XCTAssertEqual(engine.startWatchOptions.first?["interval"] as? Double, 5)
+    }
+
+    func testStopWatchPositionDelegatesToTheEngine() {
+        BackgroundGeolocation.stopWatchPosition()
+        XCTAssertEqual(engine.stopWatchCallCount, 1)
+    }
+
+    func testRemoveListenersDetachesEverySubscriber() {
+        var callCount = 0
+        _ = BackgroundGeolocation.onLocation { _ in callCount += 1 }
+        BackgroundGeolocation.removeListeners()
+        engine.emit("location", FakeEngine.sampleLocationDictionary)
+        XCTAssertEqual(callCount, 0)
+    }
+
+    func testLocationsStreamDecodesEventsAndUnsubscribesWhenItsTaskIsCancelled() async {
+        var received: Location?
+        let task = Task {
+            for await location in BackgroundGeolocation.locations {
+                received = location
+            }
+        }
+        await Task.yield()
+        engine.emit("location", FakeEngine.sampleLocationDictionary)
+        await Task.yield()
+        XCTAssertEqual(received?.uuid, "sample-uuid")
+
+        task.cancel()
+        await Task.yield()
+
+        XCTAssertEqual(BackgroundGeolocation.hub.subscriberCount(for: "location"), 0)
+    }
 }

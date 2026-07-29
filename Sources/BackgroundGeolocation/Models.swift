@@ -210,18 +210,19 @@ public struct ProviderState {
     public let network: Bool
     public let accuracyAuthorization: AccuracyAuthorization?
 
-    public init?(dictionary: [String: Any]) {
-        guard let statusValue = dictionary.int("status"),
-              let status = AuthorizationStatus(rawValue: statusValue),
-              let enabled = dictionary.bool("enabled"),
-              let gps = dictionary.bool("gps"),
-              let network = dictionary.bool("network") else {
-            return nil
+    /// Non-failable, for the same reason as `State.init(dictionary:)`: the
+    /// engine always resolves, never rejects. Missing/unrecognised fields
+    /// fall back to `.notDetermined`/`false` rather than fabricating a
+    /// payload the engine never emitted.
+    public init(dictionary: [String: Any]) {
+        if let statusValue = dictionary.int("status"), let status = AuthorizationStatus(rawValue: statusValue) {
+            self.status = status
+        } else {
+            self.status = .notDetermined
         }
-        self.status = status
-        self.enabled = enabled
-        self.gps = gps
-        self.network = network
+        self.enabled = dictionary.bool("enabled") ?? false
+        self.gps = dictionary.bool("gps") ?? false
+        self.network = dictionary.bool("network") ?? false
         if let accuracyAuthorizationValue = dictionary.int("accuracyAuthorization") {
             self.accuracyAuthorization = AccuracyAuthorization(rawValue: accuracyAuthorizationValue)
         } else {
@@ -342,11 +343,13 @@ public struct State {
     public let enabled: Bool
     public let raw: [String: Any]
 
-    public init?(dictionary: [String: Any]) {
-        guard let enabled = dictionary.bool("enabled") else {
-            return nil
-        }
-        self.enabled = enabled
+    /// Non-failable: the engine always resolves `stateDictionary()`, never
+    /// rejects (`RNBackgroundGeolocation.mm:126/135/147/154`). A missing
+    /// `enabled` key defaults to `false` rather than fabricating a whole
+    /// payload the engine never emitted; callers who need to distinguish
+    /// "engine says false" from "key absent" can check `state["enabled"]`.
+    public init(dictionary: [String: Any]) {
+        self.enabled = dictionary.bool("enabled") ?? false
         self.raw = dictionary
     }
 

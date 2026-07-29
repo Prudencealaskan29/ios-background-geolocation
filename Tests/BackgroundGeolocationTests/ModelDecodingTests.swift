@@ -82,9 +82,17 @@ final class ModelDecodingTests: XCTestCase {
             "odometer": 42.0,
             "someFutureDiagnosticKey": 7,
         ])
-        XCTAssertEqual(state?.enabled, true)
-        XCTAssertEqual(state?["odometer"] as? Double, 42.0)
-        XCTAssertEqual(state?["someFutureDiagnosticKey"] as? Int, 7)
+        XCTAssertEqual(state.enabled, true)
+        XCTAssertEqual(state["odometer"] as? Double, 42.0)
+        XCTAssertEqual(state["someFutureDiagnosticKey"] as? Int, 7)
+    }
+
+    func testStateDefaultsEnabledToFalseWhenTheKeyIsAbsentRatherThanFailing() {
+        // Non-failable: the engine always resolves `stateDictionary()`, never
+        // rejects, so decoding must not fail even on a payload missing keys.
+        let state = State(dictionary: [:])
+        XCTAssertEqual(state.enabled, false)
+        XCTAssertNil(state["enabled"], "the raw dictionary must not fabricate a key the engine never sent")
     }
 
     func testGeofenceRoundTripsThroughItsDictionary() {
@@ -124,9 +132,19 @@ final class ModelDecodingTests: XCTestCase {
             "status": 3, "enabled": true, "gps": true, "network": false,
             "accuracyAuthorization": 1,
         ])
-        XCTAssertEqual(providerState?.status, .always)
-        XCTAssertEqual(providerState?.accuracyAuthorization, .reduced)
-        XCTAssertEqual(providerState?.network, false)
+        XCTAssertEqual(providerState.status, .always)
+        XCTAssertEqual(providerState.accuracyAuthorization, .reduced)
+        XCTAssertEqual(providerState.network, false)
+    }
+
+    func testProviderStateFallsBackRatherThanFailingOnAnEmptyDictionary() {
+        // Non-failable, for the same reason as `State` — see above.
+        let providerState = ProviderState(dictionary: [:])
+        XCTAssertEqual(providerState.status, .notDetermined)
+        XCTAssertEqual(providerState.enabled, false)
+        XCTAssertEqual(providerState.gps, false)
+        XCTAssertEqual(providerState.network, false)
+        XCTAssertNil(providerState.accuracyAuthorization)
     }
 
     func testHttpEventDecodes() {

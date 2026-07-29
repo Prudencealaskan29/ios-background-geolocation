@@ -22,16 +22,26 @@ public enum BackgroundGeolocation {
 
     // MARK: - Lifecycle
 
+    /// Forces `hub` to be read (and therefore attached to `engine`) before the
+    /// first engine interaction of a session. `hub`'s default value attaches
+    /// lazily on first access; until something touches it, the engine's
+    /// `eventEmitter` slot is nil and events — including the launch-time
+    /// `authorization`/`providerchange` CoreLocation can fire before any
+    /// listener is registered — are dropped instead of buffered. `attach` is
+    /// idempotent, so calling it here is harmless even if a subscriber (or a
+    /// test) already attached the hub.
+    ///
     /// Applies `config`, THEN checks the license — the engine reads the
     /// license key out of the config it was just given, so a bad license
     /// still leaves `config` applied (`RNBackgroundGeolocation.mm:115-127`).
     @discardableResult
     public static func ready(_ config: Config) async throws -> State {
+        hub.attach(to: engine)
         engine.applyConfig(config.toDictionary())
         if let code = engine.licenseErrorCode() {
             throw licenseError(code)
         }
-        return try decodedState()
+        return State(dictionary: engine.stateDictionary())
     }
 
     /// Applies `config` and resolves state. Unlike `ready`/`start`, this
@@ -39,7 +49,7 @@ public enum BackgroundGeolocation {
     @discardableResult
     public static func setConfig(_ config: Config) async throws -> State {
         engine.applyConfig(config.toDictionary())
-        return try decodedState()
+        return State(dictionary: engine.stateDictionary())
     }
 
     /// Checks the license BEFORE starting tracking — a bad license must not
@@ -50,18 +60,18 @@ public enum BackgroundGeolocation {
             throw licenseError(code)
         }
         engine.startTracking()
-        return try decodedState()
+        return State(dictionary: engine.stateDictionary())
     }
 
     /// Never consults the license (`RNBackgroundGeolocation.mm:150-155`).
     @discardableResult
     public static func stop() async throws -> State {
         engine.stopTracking()
-        return try decodedState()
+        return State(dictionary: engine.stateDictionary())
     }
 
     public static func getState() async -> State {
-        State(dictionary: engine.stateDictionary()) ?? State(dictionary: ["enabled": false])!
+        State(dictionary: engine.stateDictionary())
     }
 
     /// Throws `.disabled` when the engine refuses (tracking is off)
@@ -108,20 +118,16 @@ public enum BackgroundGeolocation {
 
     public static func requestTemporaryFullAccuracy(purpose: String) async -> AccuracyAuthorization {
         let accuracy = await withCheckedContinuation { (continuation: CheckedContinuation<Int, Never>) in
+            let resumeGuard = ResumeGuard()
             engine.requestTemporaryFullAccuracy(purpose) { value in
-                continuation.resume(returning: value)
+                resumeGuard.runOnce { continuation.resume(returning: value) }
             }
         }
         return AccuracyAuthorization(rawValue: accuracy) ?? .reduced
     }
 
     public static func getProviderState() async -> ProviderState {
-        ProviderState(dictionary: engine.providerState()) ?? ProviderState(dictionary: [
-            "status": AuthorizationStatus.notDetermined.rawValue,
-            "enabled": false,
-            "gps": false,
-            "network": false,
-        ])!
+        ProviderState(dictionary: engine.providerState())
     }
 
     public static func isPowerSaveMode() async -> Bool {
@@ -160,7 +166,8 @@ public enum BackgroundGeolocation {
     }
 
     public static var providerChanges: AsyncStream<ProviderChangeEvent> {
-        typedStream("providerchange", decode: ProviderChangeEvent.init(dictionary:))
+        // ProviderChangeEvent (= ProviderState) is non-failable — never dropped.
+        typedStream("providerchange") { ProviderChangeEvent(dictionary: $0) }
     }
 
     public static var heartbeats: AsyncStream<HeartbeatEvent> {
@@ -205,10 +212,9 @@ public enum BackgroundGeolocation {
 
     @discardableResult
     public static func onProviderChange(_ handler: @escaping (ProviderChangeEvent) -> Void) -> Subscription {
+        // ProviderChangeEvent (= ProviderState) is non-failable — never dropped.
         hub.subscribe("providerchange") { dictionary in
-            if let event = ProviderChangeEvent(dictionary: dictionary) {
-                handler(event)
-            }
+            handler(ProviderChangeEvent(dictionary: dictionary))
         }
     }
 
@@ -261,13 +267,6 @@ public enum BackgroundGeolocation {
 
     private static func licenseError(_ code: String) -> BGeoError {
         BGeoError(code: code, message: "BGeo license check failed (\(code))")
-    }
-
-    private static func decodedState() throws -> State {
-        guard let state = State(dictionary: engine.stateDictionary()) else {
-            throw BGeoError(code: "STATE_DECODE_ERROR", message: "Failed to decode engine state")
-        }
-        return state
     }
 
     private static func decodedLocation(_ dictionary: [String: Any]) throws -> Location {
