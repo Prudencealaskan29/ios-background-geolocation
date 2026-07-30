@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		01EB6FEA28B68E4FC7A5615A /* BackgroundGeolocation in Frameworks */ = {isa = PBXBuildFile; productRef = F02F6E4D458B021B98255541 /* BackgroundGeolocation */; };
 		23107B14C35308D53C827252 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7EF06EE3330294C23DD6490 /* ContentView.swift */; };
+		4FA4C7DF1EEE928C1BFEFC78 /* DeviceLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16FC9792B1EBC49DB0AA810 /* DeviceLink.swift */; };
 		5BA63FE49AFC6376105FCAB4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25EA6ACFEA6AC88E3C65DE9A /* AppStore.swift */; };
 		8AD222BC1134358F17F14DF6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD23A5C6A47FF432665986D /* Theme.swift */; };
+		ACD22312CB18D78B6A5313D4 /* DeviceLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11AEEB24B489F3616E996EE /* DeviceLinkTests.swift */; };
 		EC2B410F62061A94CA0D9DE0 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */; };
 		F930D7CBBA4ED50B7BF38006 /* BGeoExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026A73101B563753C08511F5 /* BGeoExampleApp.swift */; };
 /* End PBXBuildFile section */
@@ -34,6 +36,8 @@
 		951D7998779736CA135F00A0 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = ..; sourceTree = SOURCE_ROOT; };
 		ACD23A5C6A47FF432665986D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		B328A65815E7DB66228D795D /* BGeoExample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BGeoExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C16FC9792B1EBC49DB0AA810 /* DeviceLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLink.swift; sourceTree = "<group>"; };
+		E11AEEB24B489F3616E996EE /* DeviceLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLinkTests.swift; sourceTree = "<group>"; };
 		E7EF06EE3330294C23DD6490 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -53,6 +57,7 @@
 			isa = PBXGroup;
 			children = (
 				6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */,
+				E11AEEB24B489F3616E996EE /* DeviceLinkTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -90,6 +95,7 @@
 				25EA6ACFEA6AC88E3C65DE9A /* AppStore.swift */,
 				026A73101B563753C08511F5 /* BGeoExampleApp.swift */,
 				E7EF06EE3330294C23DD6490 /* ContentView.swift */,
+				C16FC9792B1EBC49DB0AA810 /* DeviceLink.swift */,
 				4E5419E957991124AF1F97CE /* Info.plist */,
 				ACD23A5C6A47FF432665986D /* Theme.swift */,
 			);
@@ -176,6 +182,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EC2B410F62061A94CA0D9DE0 /* AppStoreTests.swift in Sources */,
+				ACD22312CB18D78B6A5313D4 /* DeviceLinkTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -186,6 +193,7 @@
 				5BA63FE49AFC6376105FCAB4 /* AppStore.swift in Sources */,
 				F930D7CBBA4ED50B7BF38006 /* BGeoExampleApp.swift in Sources */,
 				23107B14C35308D53C827252 /* ContentView.swift in Sources */,
+				4FA4C7DF1EEE928C1BFEFC78 /* DeviceLink.swift in Sources */,
 				8AD222BC1134358F17F14DF6 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
