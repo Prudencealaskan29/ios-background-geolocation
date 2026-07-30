@@ -307,7 +307,12 @@ public struct MapScreen: View {
         .overlay(alignment: .bottomTrailing) { fabColumn }
         .overlay(alignment: .bottomLeading) { if window.pageCount > 1 { pager } }
         .overlay(alignment: .bottom) { CoordinatesSheet(points: displayPoints, colors: colors) }
-        .onAppear { moveCamera(.center(initialCenter, zoom: nil)) }
+        // No `.onAppear` camera command here: `TrackMapView.makeUIView` already
+        // sets the map's initial region to `initialCenter` once, unanimated,
+        // at creation. An `.onAppear`-issued animated re-center to that exact
+        // same coordinate used to duplicate that work — see
+        // `Coordinator.applyCameraIfNeeded`'s no-op guard for why that was
+        // more than just redundant.
         .onChange(of: appStore.points.count) { _ in maybeFollowLive() }
         .onChange(of: window.effPage) { _ in maybeFitPage() }
         .background(colors.background)
@@ -550,6 +555,7 @@ public struct MapScreen: View {
             .background(follow ? colors.accent : colors.panel)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(radius: 6, y: 3)
+            .accessibilityIdentifier("map.recenterButton")
         }
         .padding(.trailing, 14)
         .padding(.bottom, sheetPeekHeight + 24)
@@ -634,6 +640,13 @@ struct TrackMapView: UIViewRepresentable {
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
         mapView.showsCompass = false
+        // This initial region-set is programmatic too — mark it the same way
+        // `applyCameraIfNeeded` marks its own calls, otherwise the delegate
+        // sees the flag at its unset `false` default when this (reliably
+        // real, first-ever) region change reports back, misreads it as a
+        // user pan, and disengages Follow before the map has even finished
+        // appearing.
+        context.coordinator.markProgrammaticRegionChange()
         mapView.setRegion(MKCoordinateRegion(center: initialCenter, latitudinalMeters: 1200, longitudinalMeters: 1200), animated: false)
 
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
@@ -687,6 +700,14 @@ struct TrackMapView: UIViewRepresentable {
         private var lastSnapshot: Snapshot?
         private var circleColorByObjectID: [ObjectIdentifier: String] = [:]
 
+        /// Marks the next `regionDidChangeAnimated` callback as ours — used
+        /// both by `applyCameraIfNeeded` and by `makeUIView`'s own initial
+        /// `setRegion` call, which doesn't go through `applyCameraIfNeeded`
+        /// at all but is exactly as programmatic.
+        func markProgrammaticRegionChange() {
+            isProgrammaticRegionChange = true
+        }
+
         struct Snapshot: Equatable {
             let trackKeys: [String]
             let eventKeys: [String]
@@ -711,9 +732,25 @@ struct TrackMapView: UIViewRepresentable {
         func applyCameraIfNeeded(mapView: MKMapView, target: CameraTarget?) {
             guard let target, target.id != lastAppliedCameraID else { return }
             lastAppliedCameraID = target.id
-            isProgrammaticRegionChange = true
+
             switch target.kind {
             case let .center(coordinate, zoom):
+                // A plain re-center (no zoom change) to a coordinate the map
+                // is already centered on is a no-op `MKMapView` is not
+                // guaranteed to report back through `regionDidChangeAnimated`
+                // — that delegate callback is `isProgrammaticRegionChange`'s
+                // ONLY reset path. An unreported no-op would leave the flag
+                // stuck `true`, and the next real region change (a genuine
+                // user pan) would be misread as this command's tail: the
+                // delegate would consume the stuck flag, reset it, and
+                // return WITHOUT calling `onUserPan()` — Follow would
+                // silently stay engaged through the user's first drag. Skip
+                // the call entirely rather than risk that; nothing to
+                // animate toward if the map is already there.
+                guard zoom != nil || !Self.isSameCoordinate(coordinate, mapView.centerCoordinate) else {
+                    return
+                }
+                isProgrammaticRegionChange = true
                 if let zoom {
                     let span = MKCoordinateSpan(latitudeDelta: 360 / pow(2, zoom), longitudeDelta: 360 / pow(2, zoom))
                     mapView.setRegion(MKCoordinateRegion(center: coordinate, span: span), animated: true)
@@ -721,10 +758,8 @@ struct TrackMapView: UIViewRepresentable {
                     mapView.setCenter(coordinate, animated: true)
                 }
             case let .fit(coordinates):
-                guard coordinates.count > 1 else {
-                    isProgrammaticRegionChange = false
-                    return
-                }
+                guard coordinates.count > 1 else { return }
+                isProgrammaticRegionChange = true
                 let line = MKPolyline(coordinates: coordinates, count: coordinates.count)
                 mapView.setVisibleMapRect(
                     line.boundingMapRect,
@@ -732,6 +767,13 @@ struct TrackMapView: UIViewRepresentable {
                     animated: true
                 )
             }
+        }
+
+        /// Sub-degree epsilon (~0.1mm at the equator) — treats two
+        /// coordinates as "the same place" for the no-op guard above without
+        /// depending on exact `Double` equality.
+        private static func isSameCoordinate(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D, epsilon: Double = 1e-9) -> Bool {
+            abs(a.latitude - b.latitude) < epsilon && abs(a.longitude - b.longitude) < epsilon
         }
 
         func applyOverlaysAndAnnotationsIfNeeded(
