@@ -123,74 +123,13 @@ public enum GeofenceColors {
     }
 }
 
-/// Hybrid history source for the range selector: server history when linked
-/// (same data the web console shows), otherwise the local session buffer
-/// filtered by timestamp. Swift port of `history.ts`.
-public enum HistoryLoader {
-    /// Pure: `history.ts`'s `filterPointsByRange`.
-    public static func filterPointsByRange(_ points: [Point], from: Date?, to: Date?) -> [Point] {
-        points.filter { p in
-            guard let t = parseISODate(p.timestamp) else { return false }
-            if let from, t < from { return false }
-            if let to, t > to { return false }
-            return true
-        }
-    }
-
-    /// Pure: `history.ts`'s `serverLocationToPoint` — console `/v1`+`/device`
-    /// history camelCase shape -> `Point`. `nil` when a required field
-    /// (`recordedAt`/`lat`/`lng`) is missing or the wrong type.
-    public static func point(fromServerJSON json: [String: Any]) -> Point? {
-        guard let timestamp = json["recordedAt"] as? String,
-              let latitude = (json["lat"] as? NSNumber)?.doubleValue,
-              let longitude = (json["lng"] as? NSNumber)?.doubleValue else {
-            return nil
-        }
-        // `geofence` is deliberately not decoded here: RN's own
-        // `serverLocationToPoint` never populates it either — server history
-        // doesn't carry per-point geofence detail today.
-        return Point(
-            uuid: json["uuid"] as? String,
-            latitude: latitude,
-            longitude: longitude,
-            timestamp: timestamp,
-            accuracy: (json["accuracy"] as? NSNumber)?.doubleValue,
-            speed: (json["speed"] as? NSNumber)?.doubleValue,
-            heading: (json["heading"] as? NSNumber)?.doubleValue,
-            odometer: (json["odometer"] as? NSNumber)?.doubleValue,
-            activity: (json["activityType"] as? String) ?? (json["activity"] as? String),
-            isMoving: json["isMoving"] as? Bool,
-            event: json["event"] as? String
-        )
-    }
-
-    /// Side-effecting: chooses server history (via `DeviceLink.deviceFetch`)
-    /// when linked, else the pure local filter. `history.ts`'s `loadHistory`.
-    public static func load(from: Date?, to: Date?, linked: Bool, localPoints: [Point], deviceLink: DeviceLink) async -> [Point] {
-        if linked {
-            var query = "limit=2000"
-            if let from { query += "&from=\(encode(isoString(from)))" }
-            if let to { query += "&to=\(encode(isoString(to)))" }
-            if let data = await deviceLink.deviceFetch("/device/locations?\(query)"),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let locations = json["locations"] as? [[String: Any]] {
-                // Server returns newest-first; polylines want oldest-first.
-                return locations.compactMap(point(fromServerJSON:)).reversed()
-            }
-        }
-        return filterPointsByRange(localPoints, from: from, to: to)
-    }
-
-    private static func isoString(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
-    }
-
-    private static func encode(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s
-    }
-}
+// `HistoryLoader` (the range selector's data source, a Swift port of
+// `history.ts`) lives in `Sources/History.swift` as of Task 7 — promoted out
+// of this file so it stays independently testable and this file stops
+// growing. See that file's header for why the type/method names were kept
+// as-is rather than renamed to the task-7 brief's `History.locations(range:)`
+// paraphrase. This screen calls the exact same `HistoryLoader.load`/
+// `filterPointsByRange`/`point(fromServerJSON:)` it always has.
 
 // MARK: - Screen
 
