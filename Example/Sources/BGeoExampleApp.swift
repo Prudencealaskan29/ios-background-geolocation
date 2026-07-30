@@ -1,10 +1,166 @@
+// App entry point: wires the SDK end to end before any screen renders.
+//
+// Ordering mirrors `react-native/example/App.tsx`'s `useEffect` line for
+// line: event subscriptions are opened FIRST, then the persisted device link
+// is restored, then `ready(config)` brings the engine up. This order matters:
+// `EventHub` buffers up to 64 events per event name until a subscriber
+// attaches, then LATCHES for that name — one buffered replay, delivered to
+// whichever subscriber attaches first, never re-armed. Subscribing after
+// `ready()`/`restore()`'s `setConfig` risks losing launch-time events
+// (CoreLocation's initial `didChangeAuthorization`, an early
+// `providerchange`) if more than 64 arrive first; subscribing before costs
+// nothing, since the hub simply queues events for a name with no subscriber
+// yet.
+
 import SwiftUI
+import BackgroundGeolocation
+
+/// The base config passed to `ready()`, before the user's Settings overrides
+/// (`ConfigStore.merged(into:)`) are layered on top. Swift port of
+/// `react-native/example/src/configSchema.ts`'s `BASE_CONFIG` — same five
+/// keys, same values.
+private let baseConfig = Config(
+    distanceFilter: 10,
+    stopTimeout: 5,
+    stopOnTerminate: true,
+    startOnBoot: false,
+    debug: true,
+    // Native logger at INFO for the example app; upload starts once a device
+    // link supplies `logUrl` (`DeviceLink`'s `applySdkConfig`).
+    logLevel: 3
+)
 
 @main
 struct BGeoExampleApp: App {
+    @StateObject private var appStore: AppStore
+    @StateObject private var themeStore: ThemeStore
+    @StateObject private var configStore: ConfigStore
+    private let deviceLink: DeviceLink
+    private let geofences: Geofences
+
+    init() {
+        // `DeviceLink`/`Geofences` need the SAME `AppStore` instance the view
+        // hierarchy observes, so it's built here (not via `AppStore()` a
+        // second time) and handed to `_appStore`'s `StateObject` wrapper.
+        let appStore = AppStore()
+        let deviceLink = DeviceLink(store: appStore)
+        _appStore = StateObject(wrappedValue: appStore)
+        _themeStore = StateObject(wrappedValue: ThemeStore())
+        _configStore = StateObject(wrappedValue: ConfigStore())
+        self.deviceLink = deviceLink
+        self.geofences = Geofences(store: appStore, deviceLink: deviceLink)
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(
+                appStore: appStore,
+                themeStore: themeStore,
+                configStore: configStore,
+                deviceLink: deviceLink,
+                geofences: geofences
+            )
+            .task { await bootstrap() }
         }
+    }
+
+    // MARK: - Bootstrap
+
+    private func bootstrap() async {
+        subscribeToEvents()
+        _ = await deviceLink.restore()
+
+        let config = configStore.merged(into: baseConfig)
+        do {
+            let state = try await BackgroundGeolocation.ready(config)
+            appStore.setStatus(ready: true, enabled: state.enabled)
+            log("ready", "enabled=\(state.enabled) odometer=\(state["odometer"] ?? "nil")", .info)
+            await geofences.refresh()
+        } catch {
+            log("ready", error.localizedDescription, .error)
+        }
+    }
+
+    // MARK: - Event subscriptions
+
+    private func subscribeToEvents() {
+        BackgroundGeolocation.onLocation { location in
+            appStore.appendPoint(Point(
+                uuid: location.uuid,
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                timestamp: location.timestamp,
+                accuracy: location.coords.accuracy,
+                speed: location.coords.speed,
+                heading: location.coords.heading,
+                odometer: location.odometer,
+                activity: location.activity.type.rawValue,
+                isMoving: location.isMoving,
+                event: location.event
+            ))
+            appStore.setStatus(isMoving: location.isMoving, batteryLevel: location.battery.level)
+            log(
+                "onLocation",
+                String(format: "%.6f, %.6f ±%.0fm", location.coords.latitude, location.coords.longitude, location.coords.accuracy),
+                .debug
+            )
+        }
+
+        BackgroundGeolocation.onMotionChange { event in
+            appStore.setStatus(isMoving: event.isMoving)
+            log("onMotionChange", "isMoving=\(event.isMoving)", .info)
+        }
+
+        BackgroundGeolocation.onHeartbeat { _ in
+            log("onHeartbeat", nil, .debug)
+        }
+
+        BackgroundGeolocation.onProviderChange { event in
+            log("onProviderChange", "status=\(event.status)", .warn)
+        }
+
+        BackgroundGeolocation.onAuthorization { event in
+            let failed = (event["success"] as? Bool) == false
+            log("onAuthorization", failed ? "failed" : "refreshed", failed ? .error : .info)
+            Task { await deviceLink.persistRotatedTokens(event) }
+        }
+
+        BackgroundGeolocation.onGeofence { event in
+            log("onGeofence", "\(event.action.rawValue) \(event.identifier)", .info)
+            // Geofence transitions don't ride `onLocation` — append the point
+            // here so the map and coordinates table show them (same as
+            // React Native's `App.tsx` and the web console).
+            appStore.appendPoint(Point(
+                uuid: event.location.uuid,
+                latitude: event.location.coords.latitude,
+                longitude: event.location.coords.longitude,
+                timestamp: event.location.timestamp,
+                accuracy: event.location.coords.accuracy,
+                speed: event.location.coords.speed,
+                heading: event.location.coords.heading,
+                odometer: event.location.odometer,
+                activity: event.location.activity.type.rawValue,
+                isMoving: event.location.isMoving,
+                event: "geofence",
+                geofence: PointGeofence(identifier: event.identifier, action: event.action.rawValue)
+            ))
+        }
+
+        BackgroundGeolocation.onGeofencesChange { event in
+            log("onGeofencesChange", "on=\(event.on.count) off=\(event.off.count)", .debug)
+            Task { await geofences.refresh() }
+        }
+
+        BackgroundGeolocation.onHttp { event in
+            log("onHttp", "\(event.status) \(event.success ? "ok" : "fail")", event.success ? .debug : .warn)
+        }
+
+        BackgroundGeolocation.onConnectivityChange { event in
+            log("onConnectivityChange", "connected=\(event.connected)", event.connected ? .info : .warn)
+        }
+    }
+
+    private func log(_ event: String, _ message: String?, _ level: LogLevel) {
+        LogUploader.logEvent(event, message: message, level: level, store: appStore)
     }
 }
