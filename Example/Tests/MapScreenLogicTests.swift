@@ -1,5 +1,7 @@
 import XCTest
+import MapKit
 @testable import BGeoExample
+import BackgroundGeolocation
 
 /// Covers the pure logic pulled out of `MapScreen.swift`/`CoordinatesSheet.swift`
 /// — the screens themselves are view code with no unit tests (per the task
@@ -61,7 +63,7 @@ final class MapScreenLogicTests: XCTestCase {
     }
 
     private func geofenceSnapshot(ids: [String] = ["home"], colors: [String] = [GeofenceColors.fallback]) -> GeofenceSnapshot {
-        GeofenceSnapshot(geofenceIDs: ids, geofenceColors: colors)
+        GeofenceSnapshot(geofenceKeys: ids, geofenceColors: colors)
     }
 
     func testANewLocationFixAloneDoesNotRequestAGeofenceRebuild() {
@@ -111,6 +113,85 @@ final class MapScreenLogicTests: XCTestCase {
             previousGeofences: geofenceSnapshot(ids: ["home"], colors: [GeofenceColors.fallback])
         )
         XCTAssertTrue(decision.rebuildGeofences)
+    }
+
+    // MARK: - GeofenceSnapshot.build (round 2 regression: identifier-only keys
+    // silently swallowed a radius/geometry edit — this is the actual
+    // key-construction logic the bug lived in, extracted out of
+    // `Coordinator.applyOverlaysAndAnnotationsIfNeeded` specifically so it's
+    // testable without `MKMapView`.)
+
+    func testGeofenceSnapshotBuildKeysOnGeometryNotJustIdentifier() {
+        let original = Geofence(identifier: "home", radius: 100, latitude: 52.5, longitude: 13.4)
+        let editedRadius = Geofence(identifier: "home", radius: 250, latitude: 52.5, longitude: 13.4)
+
+        let before = GeofenceSnapshot.build(from: [original], colorHex: { _ in GeofenceColors.fallback })
+        let after = GeofenceSnapshot.build(from: [editedRadius], colorHex: { _ in GeofenceColors.fallback })
+
+        XCTAssertNotEqual(before, after, "editing a geofence's radius (same identifier, same color) must change the snapshot key")
+    }
+
+    // MARK: - Coordinator wiring (integration-level, deliberately touching
+    // MKMapView/MKCircle rather than only `MapRebuild.decide`: the re-review
+    // found the five `decide`-only tests above stay green even if the
+    // Coordinator is reverted to a single combined rebuild, so they don't
+    // actually guard the behaviour they're named for. These two exercise the
+    // real `Coordinator.applyOverlaysAndAnnotationsIfNeeded` call the app
+    // makes, which is the seam both round-1's fix and round-2's regression
+    // actually live in.)
+
+    func testEditingAGeofenceRadiusRepaintsItsCircleThroughTheRealCoordinator() {
+        let mapView = MKMapView()
+        let coordinator = TrackMapView.Coordinator()
+        let original = Geofence(identifier: "home", radius: 100, latitude: 52.5, longitude: 13.4)
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [], geofenceEvents: [],
+            geofences: [original], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: nil, isMoving: false
+        )
+        XCTAssertEqual(mapView.overlays.compactMap { $0 as? MKCircle }.first?.radius, 100)
+
+        // Same identifier, same color — only the radius changed (exactly
+        // what the edit form allows, since it disables the identifier field).
+        let editedRadius = Geofence(identifier: "home", radius: 250, latitude: 52.5, longitude: 13.4)
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [], geofenceEvents: [],
+            geofences: [editedRadius], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: nil, isMoving: false
+        )
+
+        XCTAssertEqual(
+            mapView.overlays.compactMap { $0 as? MKCircle }.first?.radius, 250,
+            "editing a geofence's radius must repaint the MKCircle with the new radius"
+        )
+    }
+
+    func testAnUnrelatedLocationFixDoesNotTearDownAnUnchangedGeofenceCircleInstance() {
+        let mapView = MKMapView()
+        let coordinator = TrackMapView.Coordinator()
+        let geofence = Geofence(identifier: "home", radius: 100, latitude: 52.5, longitude: 13.4)
+        let pointA = Point(latitude: 1, longitude: 2, timestamp: "2026-07-01T00:00:00Z")
+        let pointB = Point(latitude: 1.001, longitude: 2, timestamp: "2026-07-01T00:00:05Z")
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointA], geofenceEvents: [],
+            geofences: [geofence], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointA, isMoving: true
+        )
+        let circleBefore = mapView.overlays.compactMap { $0 as? MKCircle }.first
+
+        // A new location fix changes the track/last-point snapshot but not
+        // the geofence list at all — pre-round-1, a single combined rebuild
+        // would tear down and recreate every overlay (including this circle)
+        // on every fix.
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointB], geofenceEvents: [],
+            geofences: [geofence], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointB, isMoving: true
+        )
+        let circleAfter = mapView.overlays.compactMap { $0 as? MKCircle }.first
+
+        XCTAssertTrue(circleBefore === circleAfter, "an unrelated location fix must not tear down/rebuild an unchanged geofence circle")
     }
 
     // MARK: - GeofenceColors

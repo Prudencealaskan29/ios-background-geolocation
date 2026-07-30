@@ -148,7 +148,12 @@ struct BGeoExampleApp: App {
 
         BackgroundGeolocation.onAuthorization { event in
             let failed = (event["success"] as? Bool) == false
-            log("onAuthorization", failed ? "failed" : "refreshed", data: event, failed ? .error : .info)
+            // The raw event is `{success, accessToken, refreshToken}` — live
+            // JWTs. `redactedAuthorizationLogData` strips them to a
+            // token-presence signal before this goes anywhere near the Logs
+            // screen/`bgeo.db`/`/device/logs`; the real event (with the real
+            // tokens) still goes to `persistRotatedTokens` below.
+            log("onAuthorization", failed ? "failed" : "refreshed", data: redactedAuthorizationLogData(event), failed ? .error : .info)
             Task { await deviceLink.persistRotatedTokens(event) }
         }
 
@@ -193,4 +198,17 @@ struct BGeoExampleApp: App {
     private func log(_ event: String, _ message: String?, data: Any? = nil, _ level: LogLevel) {
         LogUploader.logEvent(event, message: message, data: data, level: level, store: appStore)
     }
+}
+
+/// Redacts an `onAuthorization` event (`{success, accessToken, refreshToken}`,
+/// per `BGGeoEngine.mm`'s authorization body) down to `success` plus
+/// token-presence booleans, for the Logs screen/`bgeo.db`/`/device/logs` —
+/// none of which should ever see a live JWT. Free function (not a private
+/// method) so it's reachable from tests via `@testable import`.
+func redactedAuthorizationLogData(_ event: [String: Any]) -> [String: Any] {
+    [
+        "success": event["success"] as? Bool ?? false,
+        "hasAccessToken": !((event["accessToken"] as? String)?.isEmpty ?? true),
+        "hasRefreshToken": !((event["refreshToken"] as? String)?.isEmpty ?? true),
+    ]
 }

@@ -244,29 +244,25 @@ public let configSections: [ConfigSection] = [
         ConfigField(
             key: "locationAuthorizationRequest", label: "Authorization request", type: .enumeration,
             options: [ConfigFieldOption("Always", .string("Always")), ConfigFieldOption("When In Use", .string("WhenInUse"))],
-            defaultValue: .string("Always"),
-            hint: "ADDED — engine default \"Always\" (BGGeoEngine.mm fallback + docs table)"
+            defaultValue: .string("Always")
         ),
+        // ADDED — suppresses the Settings-nudge alert.
         ConfigField(
             key: "disableLocationAuthorizationAlert", label: "Disable auth alert", type: .bool,
             defaultValue: .bool(false),
-            hint: "ADDED — suppresses the Settings-nudge alert"
+            hint: "suppresses the Settings-nudge alert"
         ),
     ]),
     ConfigSection("Geolocation", [
         ConfigField(key: "desiredAccuracy", label: "Desired accuracy", type: .enumeration, options: accuracyOptions, defaultValue: .int(DesiredAccuracy.high.rawValue)),
         ConfigField(key: "distanceFilter", label: "Distance filter", type: .number, defaultValue: .double(10), unit: "m"),
-        ConfigField(
-            key: "stationaryRadius", label: "Stationary radius", type: .number, defaultValue: .double(200), unit: "m",
-            hint: "CORRECTED — engine default 200 (core/ios/Sources/BGGeoEngine.mm:793), not the RN/Flutter schemas' 25"
-        ),
+        // CORRECTED — engine default 200 (core/ios/Sources/BGGeoEngine.mm:793), not the RN/Flutter schemas' 25.
+        ConfigField(key: "stationaryRadius", label: "Stationary radius", type: .number, defaultValue: .double(200), unit: "m"),
         ConfigField(key: "stationaryDistanceFilter", label: "Stationary distance filter", type: .number, defaultValue: .double(75), unit: "m"),
         ConfigField(key: "stationaryDesiredAccuracy", label: "Stationary accuracy", type: .enumeration, options: stationaryAccuracyOptions, defaultValue: .string("BALANCED")),
         ConfigField(key: "stationaryKeepAlive", label: "Stationary keep-alive", type: .bool, defaultValue: .bool(true)),
-        ConfigField(
-            key: "stationaryLocationUpdateInterval", label: "Stationary interval", type: .number, defaultValue: .int(30000), unit: "ms", platform: .android,
-            hint: "ADDED — Config doc default 30000"
-        ),
+        // ADDED — Config doc default 30000.
+        ConfigField(key: "stationaryLocationUpdateInterval", label: "Stationary interval", type: .number, defaultValue: .int(30000), unit: "ms", platform: .android),
         ConfigField(key: "locationUpdateInterval", label: "Moving interval", type: .number, defaultValue: .int(1000), unit: "ms", platform: .android),
         ConfigField(key: "showsBackgroundLocationIndicator", label: "BG location indicator", type: .bool, defaultValue: .bool(false), platform: .ios),
         ConfigField(key: "disableLocationFilter", label: "Disable Kalman filter", type: .bool, defaultValue: .bool(false)),
@@ -287,21 +283,19 @@ public let configSections: [ConfigSection] = [
     ConfigSection("Motion / Activity", [
         ConfigField(key: "stopTimeout", label: "Stop timeout", type: .number, defaultValue: .int(5), unit: "min"),
         ConfigField(key: "motionTriggerDelay", label: "Motion trigger delay", type: .number, defaultValue: .int(0), unit: "ms"),
-        ConfigField(
-            key: "minimumActivityRecognitionConfidence", label: "Min AR confidence", type: .number, defaultValue: .int(50), unit: "%",
-            hint: "CORRECTED — iOS engine default 50 (core/ios/Sources/BGGeoEngine.mm:1556); Android's default is 75, RN/Flutter schemas wrongly used that here"
-        ),
+        // CORRECTED — iOS engine default 50 (core/ios/Sources/BGGeoEngine.mm:1556);
+        // Android's default is 75, RN/Flutter schemas wrongly used that here.
+        ConfigField(key: "minimumActivityRecognitionConfidence", label: "Min AR confidence", type: .number, defaultValue: .int(50), unit: "%"),
         ConfigField(key: "disableMotionActivityUpdates", label: "Disable motion updates", type: .bool, defaultValue: .bool(false)),
         ConfigField(key: "preventSuspend", label: "Prevent suspend", type: .bool, defaultValue: .bool(false), platform: .ios),
+        // ADDED (see file header).
         ConfigField(
             key: "triggerActivities", label: "Trigger activities", type: .string,
             defaultValue: .string("in_vehicle,on_bicycle,walking,running,on_foot"),
-            hint: "ADDED — CSV of activity names that count as \"moving\""
+            hint: "CSV of activity names that count as \"moving\""
         ),
-        ConfigField(
-            key: "activityRecognitionInterval", label: "AR poll interval", type: .number, defaultValue: .int(10000), unit: "ms", platform: .android,
-            hint: "ADDED — Config doc default 10000"
-        ),
+        // ADDED — Config doc default 10000.
+        ConfigField(key: "activityRecognitionInterval", label: "AR poll interval", type: .number, defaultValue: .int(10000), unit: "ms", platform: .android),
     ]),
     ConfigSection("Power", [
         ConfigField(key: "disableElasticity", label: "Disable elasticity", type: .bool, defaultValue: .bool(false)),
@@ -312,23 +306,24 @@ public let configSections: [ConfigSection] = [
         ConfigField(key: "autoSyncThreshold", label: "Auto-sync threshold", type: .number, defaultValue: .int(0)),
         ConfigField(key: "disableAutoSyncOnCellular", label: "Wi-Fi-only auto sync", type: .bool, defaultValue: .bool(false), hint: "explicit Sync still uploads on cellular"),
         ConfigField(key: "batchSync", label: "Batch sync", type: .bool, defaultValue: .bool(false)),
+        // CORRECTED — engine default -1/unbatched (core/ios/Sources/BGGeoHttpStore.mm:74,183),
+        // not the RN/Flutter schemas' 50.
         ConfigField(
             key: "maxBatchSize", label: "Max batch size", type: .number, defaultValue: .int(-1),
-            hint: "CORRECTED — engine default -1/unbatched (core/ios/Sources/BGGeoHttpStore.mm:74,183), not the RN/Flutter schemas' 50; DeviceLink sets 50 once linked, independently of this default"
+            hint: "DeviceLink sets 50 once linked, independently of this default"
         ),
-        ConfigField(
-            key: "httpTimeoutMs", label: "HTTP timeout", type: .number, defaultValue: .int(30000), unit: "ms",
-            hint: "CORRECTED — engine default 30000 (core/ios/Sources/BGGeoHttpStore.mm:185), not the RN/Flutter schemas' 60000"
-        ),
+        // CORRECTED — engine default 30000 (core/ios/Sources/BGGeoHttpStore.mm:185), not the RN/Flutter schemas' 60000.
+        ConfigField(key: "httpTimeoutMs", label: "HTTP timeout", type: .number, defaultValue: .int(30000), unit: "ms"),
+        // ADDED (see file header).
         ConfigField(
             key: "httpRootProperty", label: "HTTP root property", type: .string, defaultValue: .string("location"),
-            hint: "ADDED — \".\" merges a single record into the root"
+            hint: "\".\" merges a single record into the root"
         ),
+        // ADDED — Config doc default "POST".
         ConfigField(
             key: "method", label: "HTTP method", type: .enumeration,
             options: [ConfigFieldOption("POST", .string("POST")), ConfigFieldOption("PUT", .string("PUT")), ConfigFieldOption("PATCH", .string("PATCH"))],
-            defaultValue: .string("POST"),
-            hint: "ADDED — Config doc default \"POST\""
+            defaultValue: .string("POST")
         ),
     ]),
     ConfigSection("Persistence", [
@@ -365,10 +360,8 @@ public let configSections: [ConfigSection] = [
         ], defaultValue: .int(3), hint: "native log persistence (mirror to logcat/os_log is always on)"),
         ConfigField(key: "diagnosticExtras", label: "Diagnostic extras", type: .bool, defaultValue: .bool(false)),
         ConfigField(key: "useSessionEngine", label: "Session engine", type: .bool, defaultValue: .bool(true), platform: .ios, hint: "OFF = legacy CLLocationManager (SLC-burst degraded in background)"),
-        ConfigField(
-            key: "logMaxDays", label: "Log retention", type: .number, defaultValue: .int(3), unit: "d",
-            hint: "ADDED — Config doc default 3"
-        ),
+        // ADDED — Config doc default 3.
+        ConfigField(key: "logMaxDays", label: "Log retention", type: .number, defaultValue: .int(3), unit: "d"),
     ]),
     ConfigSection("Notification", [
         ConfigField(key: "notification.title", label: "Title", type: .string, defaultValue: .string("Location"), platform: .android),

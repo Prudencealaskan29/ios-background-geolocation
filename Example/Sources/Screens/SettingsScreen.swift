@@ -42,7 +42,20 @@ public struct SettingsScreen: View {
     private let deviceLink: DeviceLink
 
     @Environment(\.colorScheme) private var systemColorScheme
-    @SwiftUI.State private var configError: String?
+    // Per-field commit error, rendered adjacent to the field that failed
+    // (not at the bottom of the ScrollView, where a rejection on a field in
+    // the top section would be invisible). `fieldErrorToken` is bumped on
+    // every rejection (even repeats of the same key) and forced into
+    // `ConfigFieldRow`'s `CommitField` via `.id(...)`, so the field's stuck
+    // (rejected) draft text resyncs to the still-current value instead of
+    // silently keeping the number the engine never actually accepted.
+    @SwiftUI.State private var fieldErrorKey: String?
+    @SwiftUI.State private var fieldError: String?
+    @SwiftUI.State private var fieldErrorToken = 0
+    // "Reset to defaults" is a bulk action anchored to its own button, not a
+    // single field row, so its rejection renders right below that button —
+    // adjacent placement doesn't apply the same way it does to a field edit.
+    @SwiftUI.State private var resetError: String?
 
     public init(appStore: AppStore, configStore: ConfigStore, themeStore: ThemeStore, deviceLink: DeviceLink) {
         self.appStore = appStore
@@ -81,6 +94,8 @@ public struct SettingsScreen: View {
                                     value: currentValue(for: field),
                                     overridden: configStore.overrides[field.key] != nil,
                                     colors: colors,
+                                    error: fieldErrorKey == field.key ? fieldError : nil,
+                                    rejectionToken: fieldErrorKey == field.key ? fieldErrorToken : 0,
                                     onChange: { setValue(field, $0) }
                                 )
                             }
@@ -89,8 +104,8 @@ public struct SettingsScreen: View {
                     }
                 }
 
-                if let configError {
-                    Text(configError)
+                if let resetError {
+                    Text(resetError)
                         .font(.system(size: 13))
                         .foregroundColor(colors.dangerText)
                         .padding(.bottom, 12)
@@ -98,8 +113,13 @@ public struct SettingsScreen: View {
 
                 Button("Reset config to defaults") {
                     Task {
-                        await configStore.reset()
-                        logEvent("setConfig", "reset to defaults", level: .info)
+                        do {
+                            try await configStore.reset()
+                            resetError = nil
+                            logEvent("setConfig", "reset to defaults", level: .info)
+                        } catch {
+                            resetError = error.localizedDescription
+                        }
                     }
                 }
                 .buttonStyle(FilledButtonStyle(kind: .neutral, colors: colors))
@@ -125,10 +145,15 @@ public struct SettingsScreen: View {
         Task {
             do {
                 try await configStore.setOverride(field.key, raw)
-                configError = nil
+                if fieldErrorKey == field.key {
+                    fieldErrorKey = nil
+                    fieldError = nil
+                }
                 logEvent("setConfig", "\(field.key)=\(raw)", level: .info)
             } catch {
-                configError = error.localizedDescription
+                fieldErrorToken += 1
+                fieldErrorKey = field.key
+                fieldError = error.localizedDescription
             }
         }
     }
@@ -269,6 +294,15 @@ private struct ConfigFieldRow: View {
     let value: Any
     let overridden: Bool
     let colors: ThemeColors
+    /// Non-nil only when THIS field's last commit was rejected — rendered
+    /// right below the field, not at the bottom of the screen.
+    let error: String?
+    /// Bumped by the parent on every rejection of this field (0 otherwise).
+    /// Forced onto `CommitField` via `.id(...)` below so a rejection tears
+    /// down and recreates its `@State draft`, resyncing it to `value` (the
+    /// still-current, un-rejected number) instead of leaving the rejected
+    /// text sitting in the field forever.
+    let rejectionToken: Int
     let onChange: (Any) -> Void
 
     // Delegates to `ConfigCoerce.displayString`, which is `Int(exactly:)`-guarded
@@ -277,17 +311,24 @@ private struct ConfigFieldRow: View {
     private var displayString: String { ConfigCoerce.displayString(for: value) }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(field.unit.map { "\(field.label) (\($0))" } ?? field.label)
-                    .font(.system(size: 13))
-                    .foregroundColor(overridden ? colors.accentText : colors.text2)
-                if let hint = field.hint {
-                    Text(hint).font(.system(size: 11)).foregroundColor(colors.placeholder)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(field.unit.map { "\(field.label) (\($0))" } ?? field.label)
+                        .font(.system(size: 13))
+                        .foregroundColor(overridden ? colors.accentText : colors.text2)
+                    if let hint = field.hint {
+                        Text(hint).font(.system(size: 11)).foregroundColor(colors.placeholder)
+                    }
                 }
+                Spacer(minLength: 8)
+                control
             }
-            Spacer(minLength: 8)
-            control
+            if let error {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundColor(colors.dangerText)
+            }
         }
         .padding(.vertical, 6)
     }
@@ -305,8 +346,10 @@ private struct ConfigFieldRow: View {
                 guard let value = ConfigCoerce.numberFromText(text, matching: field.defaultValue) else { return }
                 onChange(value)
             }
+            .id(rejectionToken)
         case .string:
             CommitField(value: displayString, keyboardType: .default, colors: colors) { text in onChange(text) }
+                .id(rejectionToken)
         case .enumeration:
             EnumButtonsRow(
                 options: (field.options ?? []).map { (label: $0.label, value: $0.value) },

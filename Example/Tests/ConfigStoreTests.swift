@@ -152,7 +152,7 @@ final class ConfigStoreTests: XCTestCase {
         try await store.setOverride("debug", false)
         XCTAssertFalse(store.overrides.isEmpty)
 
-        await store.reset()
+        try await store.reset()
 
         XCTAssertTrue(store.overrides.isEmpty)
         let fresh = ConfigStore(userDefaults: defaults)
@@ -166,21 +166,47 @@ final class ConfigStoreTests: XCTestCase {
 
         var captured: Config?
         store.applyConfig = { config in captured = config }
-        await store.reset()
+        try await store.reset()
 
         let dictionary = try XCTUnwrap(captured?.toDictionary())
         XCTAssertEqual(dictionary["distanceFilter"] as? Double, 10.0, "distanceFilter's schema default")
         XCTAssertEqual(dictionary["debug"] as? Bool, true, "debug's schema default")
     }
 
-    func testResetWithNoOverridesDoesNotCallApplyConfig() async {
+    func testResetWithNoOverridesDoesNotCallApplyConfig() async throws {
         let store = makeStore()
         var called = false
         store.applyConfig = { _ in called = true }
 
-        await store.reset()
+        try await store.reset()
 
         XCTAssertFalse(called)
+    }
+
+    // MARK: - reset() apply-before-persist ordering (same invariant as
+    // setOverride's: a rejected setConfig must not leave `overrides` cleared
+    // while the engine still runs the old values — see reset()'s doc comment).
+
+    func testRejectedResetThrowsAndLeavesOverridesIntact() async throws {
+        let store = makeStore()
+        try await store.setOverride("distanceFilter", 42.0)
+
+        struct BoomError: Error {}
+        store.applyConfig = { _ in throw BoomError() }
+
+        do {
+            try await store.reset()
+            XCTFail("expected reset to rethrow the applyConfig failure")
+        } catch is BoomError {
+            // expected
+        } catch {
+            XCTFail("expected BoomError, got \(error)")
+        }
+
+        XCTAssertEqual(store.overrides["distanceFilter"] as? Double, 42.0, "a rejected reset must not clear an override the engine never actually dropped")
+
+        let fresh = ConfigStore(userDefaults: defaults)
+        XCTAssertEqual(fresh.overrides["distanceFilter"] as? Double, 42.0, "a rejected reset must not clear persisted storage either")
     }
 
     // MARK: - notification.* nested-patch safety (the wholesale-replace rule)

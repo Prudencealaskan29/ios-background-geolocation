@@ -111,12 +111,31 @@ public enum MapPaging {
 /// edit/delete unreachable while tracking is live. See `MapRebuild.decide`
 /// and `Coordinator.applyOverlaysAndAnnotationsIfNeeded`.
 public struct GeofenceSnapshot: Equatable {
-    public let geofenceIDs: [String]
+    /// One key per geofence: identifier AND geometry (`lat|lng|radius`), not
+    /// just the identifier. Keying on the identifier alone was a regression
+    /// (introduced alongside this split-rebuild fix itself): the edit form
+    /// disables the identifier field, so an edit can only ever change
+    /// radius/notify flags/loitering delay — none of which touched
+    /// `geofenceIDs`, so an edited fence's `MKCircle` never got torn down and
+    /// redrawn with its new radius until an unrelated add/remove/transition
+    /// forced a rebuild anyway.
+    public let geofenceKeys: [String]
     public let geofenceColors: [String]
 
-    public init(geofenceIDs: [String], geofenceColors: [String]) {
-        self.geofenceIDs = geofenceIDs
+    public init(geofenceKeys: [String], geofenceColors: [String]) {
+        self.geofenceKeys = geofenceKeys
         self.geofenceColors = geofenceColors
+    }
+
+    /// Builds the snapshot from the live `[Geofence]` list — pulled out of
+    /// `Coordinator.applyOverlaysAndAnnotationsIfNeeded` so the exact
+    /// key-construction logic (where the identifier-only regression above
+    /// lived) is unit-testable without needing `MKMapView` at all.
+    public static func build(from geofences: [Geofence], colorHex: (String) -> String) -> GeofenceSnapshot {
+        GeofenceSnapshot(
+            geofenceKeys: geofences.map { "\($0.identifier)|\($0.latitude)|\($0.longitude)|\($0.radius)" },
+            geofenceColors: geofences.map { colorHex($0.identifier) }
+        )
     }
 }
 
@@ -785,10 +804,7 @@ struct TrackMapView: UIViewRepresentable {
             lastPoint: Point?,
             isMoving: Bool
         ) {
-            let geofenceSnapshot = GeofenceSnapshot(
-                geofenceIDs: geofences.map(\.identifier),
-                geofenceColors: geofences.map(\.identifier).map(geofenceColorHex)
-            )
+            let geofenceSnapshot = GeofenceSnapshot.build(from: geofences, colorHex: geofenceColorHex)
             let trackSnapshot = TrackSnapshot(
                 trackKeys: trackPoints.map { $0.uuid ?? $0.timestamp },
                 eventKeys: geofenceEvents.map { ($0.0.uuid ?? $0.0.timestamp) + "|" + $0.1 },

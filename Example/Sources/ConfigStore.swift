@@ -67,12 +67,15 @@ public final class ConfigStore: ObservableObject {
 
     /// Drop all overrides, pushing each previously-overridden key's default
     /// back to the live engine first (mirrors `configStore.ts`'s
-    /// `resetOverrides`).
-    public func reset() async {
+    /// `resetOverrides`). Same apply-before-persist ordering as `setOverride`
+    /// above and for the same reason: a rejected reset must not clear
+    /// `overrides` while the engine still runs the old values, which would
+    /// violate the invariant `setOverride` exists to guarantee — that
+    /// `overrides` only ever contains engine-accepted keys.
+    public func reset() async throws {
         let overriddenKeys = Array(overrides.keys)
-        if !overriddenKeys.isEmpty {
-            try? await applyConfig(resetPatch(for: overriddenKeys))
-        }
+        guard !overriddenKeys.isEmpty else { return }
+        try await applyConfig(resetPatch(for: overriddenKeys))
         overrides = [:]
         userDefaults.removeObject(forKey: Self.storageKey)
     }
