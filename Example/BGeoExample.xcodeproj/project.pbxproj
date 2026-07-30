@@ -17,9 +17,12 @@
 		5818518C342F36421EE4CA2A /* DotMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7867765F0B39CAD59352C317 /* DotMarker.swift */; };
 		5BA63FE49AFC6376105FCAB4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25EA6ACFEA6AC88E3C65DE9A /* AppStore.swift */; };
 		8AD222BC1134358F17F14DF6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD23A5C6A47FF432665986D /* Theme.swift */; };
+		8DC44BB2657F8C1B4AD2E7B9 /* GeofenceFormScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 151DEE678A7A52DA72934173 /* GeofenceFormScreen.swift */; };
+		9C88A99E26F17396D62D1285 /* GeofencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9726008A851B665B55E28C7 /* GeofencesTests.swift */; };
 		A4BCE2DA8364FBA0B757D593 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE8925C4AAD9709F0DBC08C /* SettingsScreen.swift */; };
 		ACD22312CB18D78B6A5313D4 /* DeviceLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11AEEB24B489F3616E996EE /* DeviceLinkTests.swift */; };
 		AD9983F89845730E318424E8 /* MapScreenLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CED8223176FC14E7C274AC6 /* MapScreenLogicTests.swift */; };
+		C60E0FC6058ABFEE617A1791 /* Geofences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CFC7825A9912746D83FA339 /* Geofences.swift */; };
 		D41FDA3E0AE42A5C43414B8F /* MapScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16DE4D3F6CC72A6529C5487E /* MapScreen.swift */; };
 		EC2B410F62061A94CA0D9DE0 /* AppStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */; };
 		F930D7CBBA4ED50B7BF38006 /* BGeoExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026A73101B563753C08511F5 /* BGeoExampleApp.swift */; };
@@ -40,6 +43,7 @@
 		026A73101B563753C08511F5 /* BGeoExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BGeoExampleApp.swift; sourceTree = "<group>"; };
 		108D5563D0235EE6CC60CFED /* ConfigSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigSchema.swift; sourceTree = "<group>"; };
 		14567306709C0719C5673026 /* ConfigStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigStore.swift; sourceTree = "<group>"; };
+		151DEE678A7A52DA72934173 /* GeofenceFormScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeofenceFormScreen.swift; sourceTree = "<group>"; };
 		16DE4D3F6CC72A6529C5487E /* MapScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreen.swift; sourceTree = "<group>"; };
 		1CED8223176FC14E7C274AC6 /* MapScreenLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenLogicTests.swift; sourceTree = "<group>"; };
 		25EA6ACFEA6AC88E3C65DE9A /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
@@ -49,11 +53,13 @@
 		6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreTests.swift; sourceTree = "<group>"; };
 		7867765F0B39CAD59352C317 /* DotMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DotMarker.swift; sourceTree = "<group>"; };
 		951D7998779736CA135F00A0 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = ..; sourceTree = SOURCE_ROOT; };
+		9CFC7825A9912746D83FA339 /* Geofences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geofences.swift; sourceTree = "<group>"; };
 		ABBE36A8D7D4E1B24D575E23 /* CoordinatesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinatesSheet.swift; sourceTree = "<group>"; };
 		ACD23A5C6A47FF432665986D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		B097B1B120ABE99C8243C2B8 /* DateTimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateTimeField.swift; sourceTree = "<group>"; };
 		B328A65815E7DB66228D795D /* BGeoExample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BGeoExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B87A0A087DF92AC22E223091 /* ConfigStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigStoreTests.swift; sourceTree = "<group>"; };
+		B9726008A851B665B55E28C7 /* GeofencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeofencesTests.swift; sourceTree = "<group>"; };
 		C16FC9792B1EBC49DB0AA810 /* DeviceLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLink.swift; sourceTree = "<group>"; };
 		E11AEEB24B489F3616E996EE /* DeviceLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLinkTests.swift; sourceTree = "<group>"; };
 		E7EF06EE3330294C23DD6490 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -77,6 +83,7 @@
 				6402B0CDB3E8D7141A4691FF /* AppStoreTests.swift */,
 				B87A0A087DF92AC22E223091 /* ConfigStoreTests.swift */,
 				E11AEEB24B489F3616E996EE /* DeviceLinkTests.swift */,
+				B9726008A851B665B55E28C7 /* GeofencesTests.swift */,
 				1CED8223176FC14E7C274AC6 /* MapScreenLogicTests.swift */,
 			);
 			path = Tests;
@@ -94,6 +101,7 @@
 		573123C88AE6A88925AF0C17 /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				151DEE678A7A52DA72934173 /* GeofenceFormScreen.swift */,
 				16DE4D3F6CC72A6529C5487E /* MapScreen.swift */,
 				5FE8925C4AAD9709F0DBC08C /* SettingsScreen.swift */,
 			);
@@ -137,6 +145,7 @@
 				14567306709C0719C5673026 /* ConfigStore.swift */,
 				E7EF06EE3330294C23DD6490 /* ContentView.swift */,
 				C16FC9792B1EBC49DB0AA810 /* DeviceLink.swift */,
+				9CFC7825A9912746D83FA339 /* Geofences.swift */,
 				4E5419E957991124AF1F97CE /* Info.plist */,
 				ACD23A5C6A47FF432665986D /* Theme.swift */,
 				8F9DE77F46F0895AD8A07838 /* Components */,
@@ -227,6 +236,7 @@
 				EC2B410F62061A94CA0D9DE0 /* AppStoreTests.swift in Sources */,
 				32FE83F353FB0033CD3926A9 /* ConfigStoreTests.swift in Sources */,
 				ACD22312CB18D78B6A5313D4 /* DeviceLinkTests.swift in Sources */,
+				9C88A99E26F17396D62D1285 /* GeofencesTests.swift in Sources */,
 				AD9983F89845730E318424E8 /* MapScreenLogicTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -244,6 +254,8 @@
 				0EBCD56F73C37C3064BC0D2A /* DateTimeField.swift in Sources */,
 				4FA4C7DF1EEE928C1BFEFC78 /* DeviceLink.swift in Sources */,
 				5818518C342F36421EE4CA2A /* DotMarker.swift in Sources */,
+				8DC44BB2657F8C1B4AD2E7B9 /* GeofenceFormScreen.swift in Sources */,
+				C60E0FC6058ABFEE617A1791 /* Geofences.swift in Sources */,
 				D41FDA3E0AE42A5C43414B8F /* MapScreen.swift in Sources */,
 				A4BCE2DA8364FBA0B757D593 /* SettingsScreen.swift in Sources */,
 				8AD222BC1134358F17F14DF6 /* Theme.swift in Sources */,
