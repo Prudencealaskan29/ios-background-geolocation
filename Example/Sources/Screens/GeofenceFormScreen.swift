@@ -155,12 +155,12 @@ public struct GeofenceFormScreen: View {
         )
         do {
             try await geofences.add(geofence)
-            appStore.appendLog(LogLine(
-                ts: isoTimestamp(),
+            LogUploader.logEvent(
+                "addGeofence",
+                message: "\(trimmedIdentifier) r=\(ConfigCoerce.displayString(for: radius))m",
                 level: .info,
-                event: "addGeofence",
-                message: "\(trimmedIdentifier) r=\(ConfigCoerce.displayString(for: radius))m"
-            ))
+                store: appStore
+            )
             dismiss()
         } catch {
             self.error = error.localizedDescription
@@ -173,7 +173,7 @@ public struct GeofenceFormScreen: View {
         busy = true
         do {
             try await geofences.remove(identifier: existing.identifier)
-            appStore.appendLog(LogLine(ts: isoTimestamp(), level: .info, event: "removeGeofence", message: existing.identifier))
+            LogUploader.logEvent("removeGeofence", message: existing.identifier, level: .info, store: appStore)
             dismiss()
         } catch {
             self.error = error.localizedDescription
@@ -224,10 +224,4 @@ private extension View {
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: 10))
     }
-}
-
-private func isoTimestamp() -> String {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.string(from: Date())
 }

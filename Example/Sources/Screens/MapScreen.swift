@@ -343,7 +343,7 @@ public struct MapScreen: View {
     }
 
     private func log(_ event: String, _ message: String, _ level: LogLevel) {
-        appStore.appendLog(LogLine(ts: isoTimestamp(), level: level, event: event, message: message))
+        LogUploader.logEvent(event, message: message, level: level, store: appStore)
     }
 
     // MARK: - subviews
@@ -524,12 +524,6 @@ public struct MapScreen: View {
         .padding(.leading, 14)
         .padding(.bottom, sheetPeekHeight + 24)
     }
-}
-
-private func isoTimestamp() -> String {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.string(from: Date())
 }
 
 // MARK: - MKMapView wrapper

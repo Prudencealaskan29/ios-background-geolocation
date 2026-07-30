@@ -5,28 +5,29 @@
 // app-only buffer that dies with the process.
 //
 // Swift port of `react-native/example/src/logUploader.ts`; `flutter/example/
-// lib/src/log_uploader.dart` is the same port for Flutter.
+// lib/src/log_uploader.dart` is the same port for Flutter. This is the
+// app's ONLY logging entry point — `MapScreen`, `SettingsScreen` and
+// `GeofenceFormScreen` all call `LogUploader.logEvent` (directly or through
+// a thin per-screen wrapper), never `AppStore.appendLog` directly, mirroring
+// `logUploader.ts` being RN's sole `logEvent()` call path.
 //
-// **One deliberate platform divergence.** `logUploader.ts` writes every JS
-// line through the module's native queue tagged `src:"js"`, and
+// **Platform divergence, discriminator not lost.** `logUploader.ts` writes
+// every JS line through the module's native queue tagged `src:"js"`, and
 // `LogsScreen.tsx` filters `getLog()`'s poll results back down to
 // `src === 'native'` so those JS lines (already streaming live via the app
 // store) aren't double-counted. This SDK's own `BackgroundGeolocation.Logger`
-// documents that it has no such distinction on iOS — every app-facing write
+// documents that it has no `src` distinction on iOS — every app-facing write
 // is tagged `src:"native"` (see `BackgroundGeolocation+Logger.swift`'s doc
 // comment: "there is no JS layer to distinguish from"), the same tag genuine
-// engine-internal diagnostic lines (track.*/wake.*/motion.*) carry. Routing
-// every `AppStore.appendLog` call site in this app through `LogUploader`
-// would therefore make every UI-triggered log line reappear a poll cycle
-// later in `LogsScreen`'s native merge with no `src` field left to
-// distinguish it from a genuine engine line — RN's dedup key doesn't exist
-// here. Rather than invent a replacement dedup mechanism with no reference
-// counterpart, this app's existing screens (`MapScreen`, `SettingsScreen`,
-// `GeofenceFormScreen`) keep writing directly to `AppStore.appendLog` only,
-// same as before this task. `LogUploader` stands as the tested, reusable
-// single-pipeline primitive the brief asks for, ready for a call site that
-// actually wants a UI action persisted/uploaded through the engine's own
-// queue — see the task report for the full reasoning.
+// engine-internal diagnostic lines (track.*/wake.*/motion.*) carry. But
+// `Logger.write` (`BackgroundGeolocation+Logger.swift:80`) hard-codes every
+// one of those writes to `event: "app"` (the real event name/payload travel
+// inside `data` instead), while the engine's own diagnostic lines are always
+// dot-namespaced and never `"app"` (`core/ios/Sources/BGGeoEngine.mm`). So
+// `event == "app"` is the functional equivalent of RN's `src === 'js'`
+// filter, just keyed on a different field — `LogsScreen.swift`'s
+// `nativeLogEntries(from:)` uses it to drop these lines from the native
+// poll before the merge, the same way RN's filter does.
 import Foundation
 import BackgroundGeolocation
 

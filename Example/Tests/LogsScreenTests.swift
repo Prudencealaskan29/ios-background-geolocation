@@ -8,6 +8,36 @@ import BackgroundGeolocation
 @MainActor
 final class LogsScreenTests: XCTestCase {
 
+    // MARK: - nativeLogEntries — the `event == "app"` dedup filter
+
+    func testNativeLogEntriesDropsAppTaggedEntriesButKeepsEngineEntries() {
+        let appTagged = entry(level: 3, event: "app")
+        let engineTagged = entry(level: 3, event: "track.start")
+
+        let result = nativeLogEntries(from: [appTagged, engineTagged])
+
+        XCTAssertEqual(result.map(\.event), ["track.start"])
+    }
+
+    /// The exact regression the code review caught: routing every screen's
+    /// logging through `LogUploader.logEvent` means the same line now lands
+    /// in `AppStore.logs` (live) AND, via `Logger.write`'s hard-coded
+    /// `event: "app"`, in the SDK's native queue that `getLog()` polls. If
+    /// `nativeLogEntries` didn't filter that back out before the merge, an
+    /// app-authored line would appear twice once the poll caught up to it.
+    func testAppAuthoredLineAppearsExactlyOnceInTheMergedViewNotTwice() {
+        let appLine = LogLine(ts: "2026-07-01T12:00:00.000Z", level: .info, event: "start", message: "tracking started")
+        // What `getLog()` would return for that same call once `Logger.write`
+        // persists it: hard-coded `event: "app"`, real event name in `data`.
+        let queuedDuplicate = entry(level: 3, event: "app", ts: "2026-07-01T12:00:00.000Z")
+        let genuineEngineLine = entry(level: 3, event: "track.start", ts: "2026-07-01T12:00:01.000Z")
+
+        let nativeLines = nativeLogEntries(from: [queuedDuplicate, genuineEngineLine]).map(logLine(from:))
+        let merged = mergeAndFilterLogs(appLogs: [appLine], nativeLines: nativeLines, level: .all)
+
+        XCTAssertEqual(merged.map(\.event), ["start", "track.start"], "the app-authored line must appear exactly once, not twice")
+    }
+
     // MARK: - logLine(from:) — numeric level -> LogLevel name
 
     private func entry(level: Int, event: String = "track.accept", ts: String = "2026-07-01T12:00:00.123Z") -> LogEntry {

@@ -7,21 +7,27 @@
 // port for Flutter.
 //
 // Logs come from two sources, merged and sorted by `ts`: the app store's
-// live buffer (`AppStore.logs` — every screen already appends here directly,
-// e.g. `MapScreen`'s start/stop/getPosition, `SettingsScreen`'s config
-// changes and engine actions, `GeofenceFormScreen`'s add/remove) and the
-// SDK's own persisted engine diagnostics, polled via `getLog()`.
+// live buffer (`AppStore.logs`, fed by `LogUploader.logEvent` from every
+// screen's actions — `MapScreen`'s start/stop/getPosition,
+// `SettingsScreen`'s config changes and engine actions,
+// `GeofenceFormScreen`'s add/remove) and the SDK's own persisted engine
+// diagnostics, polled via `getLog()`.
 //
-// **Platform divergence from `LogsScreen.tsx` (documented in
-// `LogUploader.swift`'s header): no `src` filter on the poll.** RN's poll
-// filters `getLog()` down to `src === 'native'` because JS-authored lines
-// are ALSO written into that same native queue tagged `src:"js"` (by
-// `logUploader.ts`) and would otherwise double-count against the live
-// `appStore` stream. This app deliberately does not route
-// `AppStore.appendLog` call sites through `LogUploader`/the SDK's log queue
-// (see that file's header) — so every entry `getLog()` returns here is a
-// genuine engine-internal diagnostic line, and merging 100% of them (no
-// `src` filter) is the direct equivalent of RN's post-filter set.
+// **`event == "app"` is this platform's `src` filter.** `LogsScreen.tsx`
+// polls `getLog()` and filters down to `src === 'native'`, because
+// `logUploader.ts` ALSO writes every JS-authored line into that same native
+// queue tagged `src:"js"` — without the filter, a line already streaming
+// live via `appStore` would double-count once the poll catches up to it.
+// This SDK collapses `src` to `"native"` for every app-facing write (see
+// `LogUploader.swift`'s header), but `Logger.write`
+// (`BackgroundGeolocation+Logger.swift:80`) hard-codes every one of those
+// writes to `event: "app"` — the real event name and payload travel inside
+// `data` instead. The engine's OWN diagnostic lines are always
+// dot-namespaced (`track.start`, `wake.rearm`, `motion.stop_countdown`,
+// per `core/ios/Sources/BGGeoEngine.mm`) and never `"app"`. So
+// `event == "app"` distinguishes exactly the same two sources RN's `src`
+// does, just keyed on a different field — `nativeLogEntries(from:)` below
+// drops them from the poll before the merge, mirroring RN's filter.
 //
 // **`LogLevel` collision**: `AppStore.LogLevel` (this module) and
 // `BackgroundGeolocation.LogLevel` (the SDK) share a name once both are
@@ -49,6 +55,15 @@ import BackgroundGeolocation
 /// `.all` option for the filter UI (log lines themselves are never `.all`).
 public enum LogLevelFilter: String, CaseIterable {
     case all, verbose, debug, info, warn, error
+}
+
+/// Drops `LogUploader`-authored entries (`event == "app"`, see the file
+/// header) from a raw `getLog()` poll before it's mapped/merged — this
+/// platform's equivalent of `LogsScreen.tsx`'s `entries.filter(e => e.src
+/// === 'native')`. Genuine engine diagnostics (`track.*`/`wake.*`/`motion.*`)
+/// pass through unchanged.
+public func nativeLogEntries(from entries: [LogEntry]) -> [LogEntry] {
+    entries.filter { $0.event != "app" }
 }
 
 /// `LogsScreen.tsx`'s `LEVEL_NAMES` map: the native numeric Transistor scale
@@ -170,7 +185,7 @@ public struct LogsScreen: View {
         while !Task.isCancelled {
             let entries = await BackgroundGeolocation.getLog(limit: Self.nativeFetchLimit)
             if Task.isCancelled { return }
-            nativeLines = entries.map(logLine(from:))
+            nativeLines = nativeLogEntries(from: entries).map(logLine(from:))
             try? await Task.sleep(nanoseconds: Self.nativePollNanoseconds)
         }
     }

@@ -116,7 +116,7 @@ public struct SettingsScreen: View {
     }
 
     private func logEvent(_ event: String, _ message: String, level: LogLevel) {
-        appStore.appendLog(LogLine(ts: isoTimestamp(), level: level, event: event, message: message))
+        LogUploader.logEvent(event, message: message, level: level, store: appStore)
     }
 }
 
@@ -225,7 +225,7 @@ private struct LinkSection: View {
             do {
                 let trimmed = serverUrl.trimmingTrailingSlashes()
                 let result = try await deviceLink.link(serverUrl: trimmed, code: code)
-                appStore.appendLog(LogLine(ts: isoTimestamp(), level: .info, event: "link", message: "linked to console as \(result.deviceId)"))
+                LogUploader.logEvent("link", message: "linked to console as \(result.deviceId)", level: .info, store: appStore)
                 code = ""
             } catch {
                 self.error = error.localizedDescription
@@ -238,7 +238,7 @@ private struct LinkSection: View {
         busy = true
         Task {
             await deviceLink.unlink()
-            appStore.appendLog(LogLine(ts: isoTimestamp(), level: .info, event: "link", message: "unlinked from console"))
+            LogUploader.logEvent("link", message: "unlinked from console", level: .info, store: appStore)
             busy = false
         }
     }
@@ -603,10 +603,4 @@ private extension String {
         while result.hasSuffix("/") { result.removeLast() }
         return result
     }
-}
-
-private func isoTimestamp() -> String {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.string(from: Date())
 }
