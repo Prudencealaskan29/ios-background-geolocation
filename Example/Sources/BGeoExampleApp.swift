@@ -185,6 +185,16 @@ struct BGeoExampleApp: App {
             Task { await geofences.refresh() }
         }
 
+        // `responseText` is the response body verbatim, and it is logged that
+        // way here and on every sibling console. Worth being precise about
+        // what redaction does and does not reach: the console's redaction is
+        // key-based — `redactedAuthorizationLogData` above recognises a
+        // credential by the name of the key holding it. `responseText` is one
+        // opaque string with no internal keys, so a token echoed back by a
+        // server inside an error body would land in the Logs screen and
+        // `/device/logs` untouched. That is a limit of the by-key approach,
+        // not a gap in its implementation, and it has never been claimed as
+        // covered — the server side is what keeps it true.
         BackgroundGeolocation.onHttp { event in
             let data: [String: Any] = ["status": event.status, "success": event.success, "responseText": event.responseText]
             log("onHttp", "\(event.status) \(event.success ? "ok" : "fail")", data: data, event.success ? .debug : .warn)

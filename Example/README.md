@@ -43,6 +43,20 @@ web console's device page would show. To see events show up there too:
 3. Once linked, locations, logs and geofence changes upload to the linked
    server automatically.
 
+### What the logs redact, and what they can't
+
+The `onAuthorization` event body carries live JWTs, so it is reduced to
+`{success, hasAccessToken, hasRefreshToken}` before it reaches the Logs
+screen, the on-device log or `/device/logs`
+(`redactedAuthorizationLogData`, `Sources/BGeoExampleApp.swift`).
+
+That protection is **by key**: it recognises a credential by the name of the
+field holding it. `onHttp`'s `responseText` is the raw response body — one
+opaque string with no keys to match — so a token echoed back inside a server
+error body would be logged verbatim. It is a limit of the approach rather
+than a defect in it, and has never been claimed as covered. Keep credentials
+out of error bodies on the server side.
+
 ## Licence
 
 This app ships **no** `BGeoLicense` key, and doesn't need one: a debuggable
