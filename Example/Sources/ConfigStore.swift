@@ -149,71 +149,85 @@ public final class ConfigStore: ObservableObject {
 
     private func assignNotificationField(_ sub: String, _ raw: Any, into notification: inout NotificationConfig) {
         switch sub {
-        case "title": notification.title = ConfigCoerce.string(raw)
-        case "text": notification.text = ConfigCoerce.string(raw)
-        case "channelId": notification.channelId = ConfigCoerce.string(raw)
-        case "channelName": notification.channelName = ConfigCoerce.string(raw)
-        case "smallIcon": notification.smallIcon = ConfigCoerce.string(raw)
-        case "color": notification.color = ConfigCoerce.string(raw)
-        case "priority": notification.priority = ConfigCoerce.int(raw)
+        case "title": Self.set(&notification.title, ConfigCoerce.string(raw))
+        case "text": Self.set(&notification.text, ConfigCoerce.string(raw))
+        case "channelId": Self.set(&notification.channelId, ConfigCoerce.string(raw))
+        case "channelName": Self.set(&notification.channelName, ConfigCoerce.string(raw))
+        case "smallIcon": Self.set(&notification.smallIcon, ConfigCoerce.string(raw))
+        case "color": Self.set(&notification.color, ConfigCoerce.string(raw))
+        case "priority": Self.set(&notification.priority, ConfigCoerce.int(raw))
         default: break
         }
     }
 
     // MARK: - Key -> Config property
 
+    /// Only writes `property` when `coerced` succeeded. A type-mismatched
+    /// override (e.g. a pre-phase-0 install with a numeric
+    /// `stationaryDesiredAccuracy` still sitting in `UserDefaults` after the
+    /// string-enum fix) must leave whatever `base`/`config` already had
+    /// ALONE, not silently erase it to nil — the same clobber hazard
+    /// `overlayNotificationOverrides` exists to avoid for `notification.*`,
+    /// applied here to every scalar property too.
+    private static func set<T>(_ property: inout T?, _ coerced: T?) {
+        guard let coerced else { return }
+        property = coerced
+    }
+
     /// Every non-`notification.*` schema key, applied onto `config`. Shared
     /// by `merged(into:)`, the live single-key patch, and the reset patch —
     /// one switch, one place that can drift from `ConfigSchema.swift`
-    /// (guarded by `ConfigStoreTests`' exhaustive round-trip test).
+    /// (guarded by `ConfigStoreTests`' exhaustive round-trip test, in both
+    /// directions).
     static func apply(key: String, rawValue: Any, into config: inout Config) {
         switch key {
-        case "locationAuthorizationRequest": config.locationAuthorizationRequest = ConfigCoerce.string(rawValue)
-        case "disableLocationAuthorizationAlert": config.disableLocationAuthorizationAlert = ConfigCoerce.bool(rawValue)
-        case "desiredAccuracy": config.desiredAccuracy = ConfigCoerce.int(rawValue)
-        case "distanceFilter": config.distanceFilter = ConfigCoerce.double(rawValue)
-        case "disableLocationFilter": config.disableLocationFilter = ConfigCoerce.bool(rawValue)
-        case "locationFilterMaxAccuracy": config.locationFilterMaxAccuracy = ConfigCoerce.double(rawValue)
-        case "locationFilterMaxSpeed": config.locationFilterMaxSpeed = ConfigCoerce.double(rawValue)
-        case "locationFilterPolicy": config.locationFilterPolicy = ConfigCoerce.string(rawValue)
-        case "kalmanProfile": config.kalmanProfile = ConfigCoerce.string(rawValue)
-        case "odometerAccuracyThreshold": config.odometerAccuracyThreshold = ConfigCoerce.double(rawValue)
-        case "disableElasticity": config.disableElasticity = ConfigCoerce.bool(rawValue)
-        case "elasticityMultiplier": config.elasticityMultiplier = ConfigCoerce.double(rawValue)
-        case "stationaryDesiredAccuracy": config.stationaryDesiredAccuracy = ConfigCoerce.string(rawValue)
-        case "stationaryLocationUpdateInterval": config.stationaryLocationUpdateInterval = ConfigCoerce.int(rawValue)
-        case "triggerActivities": config.triggerActivities = ConfigCoerce.string(rawValue)
-        case "minimumActivityRecognitionConfidence": config.minimumActivityRecognitionConfidence = ConfigCoerce.int(rawValue)
-        case "activityRecognitionInterval": config.activityRecognitionInterval = ConfigCoerce.int(rawValue)
-        case "disableMotionActivityUpdates": config.disableMotionActivityUpdates = ConfigCoerce.bool(rawValue)
-        case "stopTimeout": config.stopTimeout = ConfigCoerce.int(rawValue)
-        case "showsBackgroundLocationIndicator": config.showsBackgroundLocationIndicator = ConfigCoerce.bool(rawValue)
-        case "stationaryRadius": config.stationaryRadius = ConfigCoerce.double(rawValue)
-        case "stationaryDistanceFilter": config.stationaryDistanceFilter = ConfigCoerce.double(rawValue)
-        case "preventSuspend": config.preventSuspend = ConfigCoerce.bool(rawValue)
-        case "heartbeatInterval": config.heartbeatInterval = ConfigCoerce.int(rawValue)
-        case "motionTriggerDelay": config.motionTriggerDelay = ConfigCoerce.int(rawValue)
-        case "locationUpdateInterval": config.locationUpdateInterval = ConfigCoerce.int(rawValue)
-        case "stopOnTerminate": config.stopOnTerminate = ConfigCoerce.bool(rawValue)
-        case "startOnBoot": config.startOnBoot = ConfigCoerce.bool(rawValue)
-        case "debug": config.debug = ConfigCoerce.bool(rawValue)
-        case "logLevel": config.logLevel = ConfigCoerce.int(rawValue)
-        case "logMaxDays": config.logMaxDays = ConfigCoerce.int(rawValue)
-        case "maxDaysToPersist": config.maxDaysToPersist = ConfigCoerce.int(rawValue)
-        case "httpRootProperty": config.httpRootProperty = ConfigCoerce.string(rawValue)
-        case "autoSync": config.autoSync = ConfigCoerce.bool(rawValue)
-        case "disableAutoSyncOnCellular": config.disableAutoSyncOnCellular = ConfigCoerce.bool(rawValue)
-        case "autoSyncThreshold": config.autoSyncThreshold = ConfigCoerce.int(rawValue)
-        case "batchSync": config.batchSync = ConfigCoerce.bool(rawValue)
-        case "maxBatchSize": config.maxBatchSize = ConfigCoerce.int(rawValue)
-        case "httpTimeoutMs": config.httpTimeoutMs = ConfigCoerce.int(rawValue)
-        case "maxRecordsToPersist": config.maxRecordsToPersist = ConfigCoerce.int(rawValue)
-        case "stationaryKeepAlive": config.stationaryKeepAlive = ConfigCoerce.bool(rawValue)
-        case "diagnosticExtras": config.diagnosticExtras = ConfigCoerce.bool(rawValue)
-        case "useSessionEngine": config.useSessionEngine = ConfigCoerce.bool(rawValue)
-        case "geofenceProximityRadius": config.geofenceProximityRadius = ConfigCoerce.double(rawValue)
-        case "maxMonitoredGeofences": config.maxMonitoredGeofences = ConfigCoerce.int(rawValue)
-        case "geofenceInitialTriggerEntry": config.geofenceInitialTriggerEntry = ConfigCoerce.bool(rawValue)
+        case "locationAuthorizationRequest": set(&config.locationAuthorizationRequest, ConfigCoerce.string(rawValue))
+        case "disableLocationAuthorizationAlert": set(&config.disableLocationAuthorizationAlert, ConfigCoerce.bool(rawValue))
+        case "desiredAccuracy": set(&config.desiredAccuracy, ConfigCoerce.int(rawValue))
+        case "distanceFilter": set(&config.distanceFilter, ConfigCoerce.double(rawValue))
+        case "disableLocationFilter": set(&config.disableLocationFilter, ConfigCoerce.bool(rawValue))
+        case "locationFilterMaxAccuracy": set(&config.locationFilterMaxAccuracy, ConfigCoerce.double(rawValue))
+        case "locationFilterMaxSpeed": set(&config.locationFilterMaxSpeed, ConfigCoerce.double(rawValue))
+        case "locationFilterPolicy": set(&config.locationFilterPolicy, ConfigCoerce.string(rawValue))
+        case "kalmanProfile": set(&config.kalmanProfile, ConfigCoerce.string(rawValue))
+        case "odometerAccuracyThreshold": set(&config.odometerAccuracyThreshold, ConfigCoerce.double(rawValue))
+        case "disableElasticity": set(&config.disableElasticity, ConfigCoerce.bool(rawValue))
+        case "elasticityMultiplier": set(&config.elasticityMultiplier, ConfigCoerce.double(rawValue))
+        case "stationaryDesiredAccuracy": set(&config.stationaryDesiredAccuracy, ConfigCoerce.string(rawValue))
+        case "stationaryLocationUpdateInterval": set(&config.stationaryLocationUpdateInterval, ConfigCoerce.int(rawValue))
+        case "triggerActivities": set(&config.triggerActivities, ConfigCoerce.string(rawValue))
+        case "minimumActivityRecognitionConfidence": set(&config.minimumActivityRecognitionConfidence, ConfigCoerce.int(rawValue))
+        case "activityRecognitionInterval": set(&config.activityRecognitionInterval, ConfigCoerce.int(rawValue))
+        case "disableMotionActivityUpdates": set(&config.disableMotionActivityUpdates, ConfigCoerce.bool(rawValue))
+        case "stopTimeout": set(&config.stopTimeout, ConfigCoerce.int(rawValue))
+        case "showsBackgroundLocationIndicator": set(&config.showsBackgroundLocationIndicator, ConfigCoerce.bool(rawValue))
+        case "stationaryRadius": set(&config.stationaryRadius, ConfigCoerce.double(rawValue))
+        case "stationaryDistanceFilter": set(&config.stationaryDistanceFilter, ConfigCoerce.double(rawValue))
+        case "preventSuspend": set(&config.preventSuspend, ConfigCoerce.bool(rawValue))
+        case "heartbeatInterval": set(&config.heartbeatInterval, ConfigCoerce.int(rawValue))
+        case "motionTriggerDelay": set(&config.motionTriggerDelay, ConfigCoerce.int(rawValue))
+        case "locationUpdateInterval": set(&config.locationUpdateInterval, ConfigCoerce.int(rawValue))
+        case "stopOnTerminate": set(&config.stopOnTerminate, ConfigCoerce.bool(rawValue))
+        case "startOnBoot": set(&config.startOnBoot, ConfigCoerce.bool(rawValue))
+        case "debug": set(&config.debug, ConfigCoerce.bool(rawValue))
+        case "logLevel": set(&config.logLevel, ConfigCoerce.int(rawValue))
+        case "logMaxDays": set(&config.logMaxDays, ConfigCoerce.int(rawValue))
+        case "maxDaysToPersist": set(&config.maxDaysToPersist, ConfigCoerce.int(rawValue))
+        case "httpRootProperty": set(&config.httpRootProperty, ConfigCoerce.string(rawValue))
+        case "method": set(&config.method, ConfigCoerce.string(rawValue))
+        case "autoSync": set(&config.autoSync, ConfigCoerce.bool(rawValue))
+        case "disableAutoSyncOnCellular": set(&config.disableAutoSyncOnCellular, ConfigCoerce.bool(rawValue))
+        case "autoSyncThreshold": set(&config.autoSyncThreshold, ConfigCoerce.int(rawValue))
+        case "batchSync": set(&config.batchSync, ConfigCoerce.bool(rawValue))
+        case "maxBatchSize": set(&config.maxBatchSize, ConfigCoerce.int(rawValue))
+        case "httpTimeoutMs": set(&config.httpTimeoutMs, ConfigCoerce.int(rawValue))
+        case "maxRecordsToPersist": set(&config.maxRecordsToPersist, ConfigCoerce.int(rawValue))
+        case "stationaryKeepAlive": set(&config.stationaryKeepAlive, ConfigCoerce.bool(rawValue))
+        case "diagnosticExtras": set(&config.diagnosticExtras, ConfigCoerce.bool(rawValue))
+        case "useSessionEngine": set(&config.useSessionEngine, ConfigCoerce.bool(rawValue))
+        case "geofenceProximityRadius": set(&config.geofenceProximityRadius, ConfigCoerce.double(rawValue))
+        case "maxMonitoredGeofences": set(&config.maxMonitoredGeofences, ConfigCoerce.int(rawValue))
+        case "geofenceInitialTriggerEntry": set(&config.geofenceInitialTriggerEntry, ConfigCoerce.bool(rawValue))
         default: break // notification.* is handled by the caller; unknown keys are ignored.
         }
     }

@@ -15,29 +15,34 @@
 // RN/Flutter schemas.
 //
 // SCHEMA-VS-CONFIG DIFF (the app-side twin of `ConfigDriftTests`, run by hand
-// against `Config`'s 57 properties per this task's brief): RN/Flutter's own
-// schema covers 40 of the 57 `Config` properties (39 scalar keys +
-// `notification`, which fans out to 7 UI fields). This port ADDS 7 more
-// properties RN/Flutter leave unschema'd, rather than silently carrying the
-// same gap forward (see each field's "ADDED" comment below for its source
-// default): `locationAuthorizationRequest`, `disableLocationAuthorizationAlert`
-// (new "Permissions" section), `stationaryLocationUpdateInterval`,
-// `triggerActivities`, `activityRecognitionInterval` (Motion/Activity —
-// Android-only ones tagged `.android`), `logMaxDays` (Diagnostics/Engine),
-// `httpRootProperty` (HTTP/Sync). That leaves 10 `Config` properties with no
-// schema entry, all deliberately excluded — not oversights:
+// against `Config`'s 57 properties per this task's brief, and asserted by
+// `ConfigStoreTests.testEveryConfigPropertyIsInTheSchemaOrDocumentedAsExcluded`
+// in both directions): RN/Flutter's own schema covers 40 of the 57 `Config`
+// properties (39 scalar keys + `notification`, which fans out to 7 UI
+// fields). This port ADDS 8 more properties RN/Flutter leave unschema'd,
+// rather than silently carrying the same gap forward (see each field's
+// "ADDED" comment below for its source default): `locationAuthorizationRequest`,
+// `disableLocationAuthorizationAlert` (new "Permissions" section),
+// `stationaryLocationUpdateInterval`, `triggerActivities`,
+// `activityRecognitionInterval` (Motion/Activity — Android-only ones tagged
+// `.android`), `logMaxDays` (Diagnostics/Engine), `httpRootProperty`,
+// `method` (HTTP/Sync). That leaves 9 `Config` properties with no schema
+// entry, all deliberately excluded — not oversights:
 //   - `foregroundService`, `backgroundPermissionRationale`: documented no-ops.
 //   - `locationAuthorizationAlert`, `headers`, `params`, `extras`: nested
 //     `[String: Any]`/`[String: String]` dictionaries — `ConfigField.type` is
 //     bool/number/enumeration/string only; a raw dictionary editor is a
 //     different kind of UI this schema's type system doesn't (and, per
 //     RN/Flutter precedent, isn't meant to) express.
-//   - `url`, `logUrl`, `method`, `authorization`: the upload endpoint's
-//     identity and credentials. These are exclusively owned by `DeviceLink`
-//     (the Settings screen's "Debug console" link section) — editing them
-//     independently here would desync the device link (e.g. changing `url`
-//     without rotating `authorization` breaks the linked server
-//     relationship). RN/Flutter draw the same line for the same reason.
+//   - `url`, `logUrl`, `authorization`: the upload endpoint's identity and
+//     credentials. These are exclusively owned by `DeviceLink` (the Settings
+//     screen's "Debug console" link section) — editing them independently
+//     here would desync the device link (e.g. changing `url` without
+//     rotating `authorization` breaks the linked server relationship).
+//     RN/Flutter draw the same line for the same reason. `method` does NOT
+//     belong on this list — `DeviceLink` never sets `Config.method` (its
+//     `deviceFetch`'s `method` parameter is a distinct, local thing) — so
+//     `method` is schema'd normally below, not excluded.
 
 import Foundation
 import BackgroundGeolocation
@@ -163,6 +168,22 @@ public enum ConfigCoerce {
     public static func string(_ value: Any) -> String? {
         value as? String
     }
+
+    /// Parses a settings-field text draft into the numeric type matching
+    /// `kindOf`'s case (`Int` or `Double`). Returns nil — never traps — for
+    /// unparsable text OR a value `Int(exactly:)` can't represent (e.g. a
+    /// 22-digit string typed into "Max batch size": `Double(text)` parses
+    /// fine to `~1.1e21`, but `Int(1.1e21)` crashes the process). The digits
+    /// keyboard makes an arbitrarily long numeric string trivially reachable
+    /// from a normal settings edit, so this must not use the trapping
+    /// initializer.
+    public static func numberFromText(_ text: String, matching kindOf: ConfigValue) -> Any? {
+        guard let parsed = Double(text) else { return nil }
+        if case .double = kindOf {
+            return parsed
+        }
+        return Int(exactly: parsed.rounded())
+    }
 }
 
 // MARK: - Schema
@@ -186,11 +207,15 @@ private let stationaryAccuracyOptions: [ConfigFieldOption] = [
 public let configSections: [ConfigSection] = [
     // ADDED section (not in RN/Flutter — see file header diff note).
     ConfigSection("Permissions", [
+        // Default "Always" IS documented, despite `Config.swift` itself
+        // being silent: the engine hard-codes the `?: @"Always"` fallback
+        // (core/ios/Sources/BGGeoEngine.mm:2157,2372) and the docs table
+        // states Default 'Always' — not a guess.
         ConfigField(
             key: "locationAuthorizationRequest", label: "Authorization request", type: .enumeration,
             options: [ConfigFieldOption("Always", .string("Always")), ConfigFieldOption("When In Use", .string("WhenInUse"))],
             defaultValue: .string("Always"),
-            hint: "ADDED — no documented Config default; \"Always\" matches the SDK's own fixtures/examples"
+            hint: "ADDED — engine default \"Always\" (BGGeoEngine.mm fallback + docs table)"
         ),
         ConfigField(
             key: "disableLocationAuthorizationAlert", label: "Disable auth alert", type: .bool,
@@ -256,6 +281,12 @@ public let configSections: [ConfigSection] = [
         ConfigField(
             key: "httpRootProperty", label: "HTTP root property", type: .string, defaultValue: .string("location"),
             hint: "ADDED — \".\" merges a single record into the root"
+        ),
+        ConfigField(
+            key: "method", label: "HTTP method", type: .enumeration,
+            options: [ConfigFieldOption("POST", .string("POST")), ConfigFieldOption("PUT", .string("PUT")), ConfigFieldOption("PATCH", .string("PATCH"))],
+            defaultValue: .string("POST"),
+            hint: "ADDED — Config doc default \"POST\""
         ),
     ]),
     ConfigSection("Persistence", [

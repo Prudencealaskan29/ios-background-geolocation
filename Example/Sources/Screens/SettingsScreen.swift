@@ -4,16 +4,16 @@
 //
 // Swift port of `react-native/example/src/screens/SettingsScreen.tsx`
 // (`flutter/example/lib/src/screens/settings_screen.dart` is the same port
-// for Flutter). ONE DELIBERATE SCOPE DIFFERENCE from both siblings, per this
-// task's brief: `requestPermission`/`getCurrentPosition` live on RN's Map
-// screen, and `requestTemporaryFullAccuracy`/`changePace`/`destroyLog` aren't
-// wired into ANY RN/Flutter example screen at all (verified: neither exists
-// under `example/src/screens/` for RN, nor `example/lib/src/screens/` for
-// Flutter). The brief for THIS task explicitly names all five as actions
-// this screen must expose, and no other task in this plan claims them
-// (task-5-brief.md's Map screen doesn't mention permission/position
-// actions), so they're consolidated here rather than left unreachable from
-// the whole app or silently dropped.
+// for Flutter). RN's actual Settings screen: `destroyLocations`, `getCount`,
+// `getLog`, `getState`, `resetOdometer`, `sync`, `uploadLog`, link/unlink —
+// `requestPermission`/`getCurrentPosition`/`start`/`stop` live on RN's Map
+// screen instead (Task 5 owns those, for parity with exactly one button per
+// call across the app). Coordinator-confirmed ruling on the brief's original
+// (misdescribed) action list: `requestTemporaryFullAccuracy`/`changePace`/
+// `destroyLog` are kept here even though neither RN nor Flutter wires them
+// into any example screen — they have no RN counterpart, so keeping them
+// cannot create a parity conflict the way duplicating requestPermission/
+// getCurrentPosition would have.
 //
 // Wiring note (Task 8's job, not this one — see that task's brief): this
 // view takes its `AppStore`/`ConfigStore`/`ThemeStore`/`DeviceLink`
@@ -290,12 +290,8 @@ private struct ConfigFieldRow: View {
             .labelsHidden()
         case .number:
             CommitField(value: displayString, keyboardType: .numbersAndPunctuation, colors: colors) { text in
-                guard let parsed = Double(text) else { return }
-                if case .double = field.defaultValue {
-                    onChange(parsed)
-                } else {
-                    onChange(Int(parsed))
-                }
+                guard let value = ConfigCoerce.numberFromText(text, matching: field.defaultValue) else { return }
+                onChange(value)
             }
         case .string:
             CommitField(value: displayString, keyboardType: .default, colors: colors) { text in onChange(text) }
@@ -363,8 +359,12 @@ private struct EnumButtonsRow<Value>: View {
     let colors: ThemeColors
     let onSelect: (Value) -> Void
 
+    // A plain `HStack`, not a wrapping layout: iOS 15.5 predates SwiftUI's
+    // `Layout` protocol (needs iOS 16), and the option counts here (2-6)
+    // never overflow a settings-row width in practice, so a real wrap
+    // implementation would be unused complexity.
     var body: some View {
-        WrapHStack {
+        HStack(spacing: 4) {
             ForEach(options.indices, id: \.self) { index in
                 let option = options[index]
                 let selected = isSelected(option.value)
@@ -376,18 +376,6 @@ private struct EnumButtonsRow<Value>: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
-    }
-}
-
-/// Minimal left-to-right wrap layout (iOS 15.5 predates SwiftUI's `Layout`
-/// protocol, which needs iOS 16) — good enough for a handful of short option
-/// pills; falls back to a plain `HStack` since the option counts here (2-6)
-/// never overflow a settings-row width in practice.
-private struct WrapHStack<Content: View>: View {
-    let content: Content
-    init(@ViewBuilder content: () -> Content) { self.content = content() }
-    var body: some View {
-        HStack(spacing: 4) { content }
     }
 }
 
@@ -438,17 +426,13 @@ private struct StateSection: View {
             stateRow("upload queue", "\(queueCount.map(String.init) ?? "—") records")
             stateRow("log history", logCountLabel)
 
-            actionButton("Request permission", key: "requestPermission") {
-                let status = try await BackgroundGeolocation.requestPermission()
-                return "status=\(status.rawValue)"
-            }
+            // `requestPermission`/`getCurrentPosition` deliberately NOT here —
+            // they belong on Task 5's Map screen (see file header). Kept:
+            // `requestTemporaryFullAccuracy`/`changePace`/`destroyLog`, which
+            // have no RN/Flutter screen home at all.
             actionButton("Request full accuracy", key: "requestTemporaryFullAccuracy") {
                 let accuracy = await BackgroundGeolocation.requestTemporaryFullAccuracy(purpose: temporaryFullAccuracyPurpose)
                 return accuracy == .full ? "full" : "reduced"
-            }
-            actionButton("Get current position", key: "getCurrentPosition") {
-                let location = try await BackgroundGeolocation.getCurrentPosition()
-                return String(format: "%.5f, %.5f", location.coords.latitude, location.coords.longitude)
             }
 
             HStack {

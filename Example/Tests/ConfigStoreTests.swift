@@ -119,7 +119,7 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertTrue(fresh.overrides.isEmpty, "reset must not survive a fresh instance")
     }
 
-    func testResetPushesDefaultsForPreviouslyOverriddenKeys() async {
+    func testResetPushesDefaultsForPreviouslyOverriddenKeys() async throws {
         let store = makeStore()
         await store.setOverride("distanceFilter", 42.0)
         await store.setOverride("debug", false)
@@ -128,7 +128,7 @@ final class ConfigStoreTests: XCTestCase {
         store.applyConfig = { config in captured = config }
         await store.reset()
 
-        let dictionary = try! XCTUnwrap(captured?.toDictionary())
+        let dictionary = try XCTUnwrap(captured?.toDictionary())
         XCTAssertEqual(dictionary["distanceFilter"] as? Double, 10.0, "distanceFilter's schema default")
         XCTAssertEqual(dictionary["debug"] as? Bool, true, "debug's schema default")
     }
@@ -145,14 +145,14 @@ final class ConfigStoreTests: XCTestCase {
 
     // MARK: - notification.* nested-patch safety (the wholesale-replace rule)
 
-    func testNotificationOverrideLivePatchFillsEverySiblingFromSchemaDefaults() async {
+    func testNotificationOverrideLivePatchFillsEverySiblingFromSchemaDefaults() async throws {
         let store = makeStore()
         var captured: Config?
         store.applyConfig = { config in captured = config }
 
         await store.setOverride("notification.priority", 2)
 
-        let notification = try! XCTUnwrap(captured?.notification)
+        let notification = try XCTUnwrap(captured?.notification)
         let dictionary = notification.toDictionary()
         XCTAssertEqual(dictionary["priority"] as? Int, 2, "the field that actually changed")
         // Every OTHER notification field must also be present — proving the
@@ -179,6 +179,61 @@ final class ConfigStoreTests: XCTestCase {
         // THIS patch too, not get reset to the schema default.
         XCTAssertEqual(captured?.notification?.title, "Custom title")
         XCTAssertEqual(captured?.notification?.priority, 1)
+    }
+
+    // MARK: - type-mismatched overrides must not clobber base's value
+    //
+    // A persisted override can be the wrong type — e.g. a pre-phase-0 RN
+    // install left a numeric `stationaryDesiredAccuracy` (the un-fixed
+    // scale) in UserDefaults, and after upgrading to the corrected string
+    // enum, `ConfigCoerce.string(-1)` returns nil. `ConfigStore.apply`'s
+    // `set(_:_:)` helper must skip the assignment in that case, not write
+    // `nil` over whatever `base` already had — the exact same clobber shape
+    // `overlayNotificationOverrides` was written to avoid, but on the scalar
+    // switch rather than the notification one.
+
+    func testTypeMismatchedScalarOverrideDoesNotClobberBaseValueOnMergedPath() async {
+        let store = makeStore()
+        // Simulates the legacy numeric stationaryDesiredAccuracy sitting in
+        // UserDefaults from before the phase-0 string-enum fix.
+        await store.setOverride("stationaryDesiredAccuracy", -1)
+
+        let base = Config(stationaryDesiredAccuracy: "BALANCED")
+        let merged = store.merged(into: base)
+
+        XCTAssertEqual(merged.stationaryDesiredAccuracy, "BALANCED", "a type-mismatched override must not erase base's value")
+    }
+
+    func testTypeMismatchedNotificationOverrideDoesNotClobberBaseSiblingOnMergedPath() async {
+        let store = makeStore()
+        await store.setOverride("notification.priority", "not-a-number")
+
+        let base = Config(notification: NotificationConfig(priority: 1))
+        let merged = store.merged(into: base)
+
+        XCTAssertEqual(merged.notification?.priority, 1, "a type-mismatched override must not erase base's value")
+    }
+
+    // MARK: - numeric text parsing must never crash (Int(exactly:) not Int())
+
+    func testNumberFromTextRejectsIntOverflowInsteadOfTrapping() {
+        // Double(text) parses fine (~1.1e21); Int(1.1e21) would TRAP via the
+        // non-failable initializer. This exact string is reachable by typing
+        // 22 digits into a "Max batch size"-style field.
+        XCTAssertNil(ConfigCoerce.numberFromText("1100000000000000000000", matching: .int(50)))
+    }
+
+    func testNumberFromTextParsesValidIntWithinRange() {
+        XCTAssertEqual(ConfigCoerce.numberFromText("42", matching: .int(50)) as? Int, 42)
+    }
+
+    func testNumberFromTextParsesDoubleFieldsAsDoubleEvenForHugeMagnitudes() {
+        // Double fields never call Int(exactly:), so a huge value is fine.
+        XCTAssertEqual(ConfigCoerce.numberFromText("1100000000000000000000", matching: .double(10)) as? Double, 1.1e21)
+    }
+
+    func testNumberFromTextRejectsUnparsableText() {
+        XCTAssertNil(ConfigCoerce.numberFromText("not-a-number", matching: .int(5)))
     }
 
     // MARK: - drift guard: every non-notification schema key maps to a real
@@ -219,6 +274,42 @@ final class ConfigStoreTests: XCTestCase {
             let sub = String(field.key.dropFirst("notification.".count))
             Self.assertMatches(dictionary[sub], expected[field.key], field: field)
         }
+    }
+
+    /// The reverse direction of the drift guard above: walks `Config`'s ACTUAL
+    /// stored properties (via `Mirror`, so this can't itself drift out of
+    /// sync with `Config.swift` the way a hardcoded name list could) and
+    /// asserts every one is either in the schema or in the documented
+    /// exclusion list from `ConfigSchema.swift`'s header comment. Mirrors the
+    /// SDK's own `ConfigDriftTests.testConfigCoversExactlyTheKeysTypesTSDeclares`
+    /// shape, including the "assert the expected count, update deliberately"
+    /// guard against the property list itself drifting unnoticed.
+    func testEveryConfigPropertyIsInTheSchemaOrDocumentedAsExcluded() {
+        let configPropertyNames = Set(Mirror(reflecting: Config()).children.compactMap(\.label))
+        XCTAssertEqual(configPropertyNames.count, 57, "Config's property count changed — update this expectation deliberately")
+
+        let schemaPropertyNames = Set(Self.nonNotificationFields.map(\.key)).union(["notification"])
+
+        // From ConfigSchema.swift's header comment — keep these two lists in
+        // sync by hand; this test's job is to catch anything belonging to
+        // NEITHER, not to own the reasoning for why each is excluded.
+        let documentedExclusions: Set<String> = [
+            "foregroundService", "backgroundPermissionRationale", // documented no-ops
+            "locationAuthorizationAlert", "headers", "params", "extras", // dictionary types
+            "url", "logUrl", "authorization", // DeviceLink-owned
+        ]
+
+        let uncovered = configPropertyNames.subtracting(schemaPropertyNames).subtracting(documentedExclusions)
+        XCTAssertTrue(uncovered.isEmpty, "Config properties with neither a schema entry nor a documented exclusion: \(uncovered.sorted())")
+
+        // The exclusion list itself must stay accurate — every name in it
+        // really is a Config property, and none of them snuck into the
+        // schema without the comment being updated (which would make the
+        // exclusion claim false).
+        let staleExclusions = documentedExclusions.subtracting(configPropertyNames)
+        XCTAssertTrue(staleExclusions.isEmpty, "documented exclusions that aren't real Config properties: \(staleExclusions.sorted())")
+        let exclusionsNowInSchema = documentedExclusions.intersection(schemaPropertyNames)
+        XCTAssertTrue(exclusionsNowInSchema.isEmpty, "keys documented as excluded but now present in the schema — update the header comment: \(exclusionsNowInSchema.sorted())")
     }
 
     // MARK: - test helpers
