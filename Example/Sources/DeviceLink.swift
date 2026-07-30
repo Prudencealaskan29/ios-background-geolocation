@@ -204,12 +204,12 @@ public final class DeviceLink {
         saveStoredLink(link)
     }
 
-    /// Clears persistence and unsets the SDK's `url`/`authorization` via the
-    /// clear sentinel (see the file header). Deliberately non-throwing, same
-    /// reasoning as `restore()`.
+    /// Clears persistence and unsets the SDK's `url`/`logUrl`/`authorization`
+    /// via the clear sentinel (see the file header). Deliberately non-throwing,
+    /// same reasoning as `restore()`.
     public func unlink() async {
         clearStoredLink()
-        try? await applyConfig(Config(url: Config.clearString, authorization: AuthorizationConfig.clear))
+        try? await applyConfig(Config(logUrl: Config.clearString, url: Config.clearString, authorization: AuthorizationConfig.clear))
         store.setLink(linked: false, clearDeviceId: true)
     }
 

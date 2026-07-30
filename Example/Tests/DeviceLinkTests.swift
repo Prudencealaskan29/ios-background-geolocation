@@ -257,6 +257,10 @@ final class DeviceLinkTests: XCTestCase {
         // string is the Flutter workaround this task deliberately does not
         // copy (Swift's Config has a real clear sentinel; Dart's does not).
         XCTAssertTrue(dictionary["url"] is NSNull, "url must serialise as NSNull, got \(String(describing: dictionary["url"]))")
+        // logUrl must clear the same way as url — otherwise the engine keeps
+        // POSTing this device's logs to the server it just unlinked from,
+        // now with the auth block stripped.
+        XCTAssertTrue(dictionary["logUrl"] is NSNull, "logUrl must serialise as NSNull, got \(String(describing: dictionary["logUrl"]))")
         XCTAssertTrue(dictionary["authorization"] is NSNull, "authorization must serialise as NSNull, got \(String(describing: dictionary["authorization"]))")
 
         XCTAssertNil(loadPersistedLink())
