@@ -101,6 +101,67 @@ public enum MapPaging {
     }
 }
 
+/// Change-detection key for geofence pins/circles — deliberately excludes
+/// every track/last-point field so an incoming location fix (which changes
+/// on ~every accepted fix while tracking) never invalidates it. Splitting
+/// this out from the track's own change key is the fix for the review
+/// finding that a live location fix was tearing down and rebuilding EVERY
+/// annotation, including the geofence pin the user just tapped — dismissing
+/// its callout before the ⓘ accessory could be tapped, making geofence
+/// edit/delete unreachable while tracking is live. See `MapRebuild.decide`
+/// and `Coordinator.applyOverlaysAndAnnotationsIfNeeded`.
+public struct GeofenceSnapshot: Equatable {
+    public let geofenceIDs: [String]
+    public let geofenceColors: [String]
+
+    public init(geofenceIDs: [String], geofenceColors: [String]) {
+        self.geofenceIDs = geofenceIDs
+        self.geofenceColors = geofenceColors
+    }
+}
+
+/// Change-detection key for everything that legitimately changes on (almost)
+/// every incoming fix: the polyline, the track/geofence-event dots and the
+/// "last point" marker.
+public struct TrackSnapshot: Equatable {
+    public let trackKeys: [String]
+    public let eventKeys: [String]
+    public let lastKey: String?
+    public let lastMoving: Bool?
+    public let showPolyline: Int // polyline.count, coarse enough to detect on/off + growth
+
+    public init(trackKeys: [String], eventKeys: [String], lastKey: String?, lastMoving: Bool?, showPolyline: Int) {
+        self.trackKeys = trackKeys
+        self.eventKeys = eventKeys
+        self.lastKey = lastKey
+        self.lastMoving = lastMoving
+        self.showPolyline = showPolyline
+    }
+}
+
+/// Which of the two independent snapshots actually changed — the pure logic
+/// `Coordinator.applyOverlaysAndAnnotationsIfNeeded` acts on. Kept as a plain
+/// equality comparison (no `MKMapView` involved) so it's unit-testable, per
+/// this file's existing `MapPaging` precedent.
+public struct MapRebuildDecision: Equatable {
+    public let rebuildTrack: Bool
+    public let rebuildGeofences: Bool
+}
+
+public enum MapRebuild {
+    public static func decide(
+        track: TrackSnapshot,
+        previousTrack: TrackSnapshot?,
+        geofences: GeofenceSnapshot,
+        previousGeofences: GeofenceSnapshot?
+    ) -> MapRebuildDecision {
+        MapRebuildDecision(
+            rebuildTrack: track != previousTrack,
+            rebuildGeofences: geofences != previousGeofences
+        )
+    }
+}
+
 /// Geofence transition colors — parity with the web console's `TrackMap` and
 /// RN's `GEOFENCE_ACTION_COLOR`/`GEOFENCE_FALLBACK_COLOR`
 /// (`MapScreen.tsx:33-38`). Returns hex strings (not `Color`) so this stays
@@ -366,7 +427,7 @@ public struct MapScreen: View {
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundColor(appStore.status.isMoving ? colors.successText : colors.textDim)
             if let batteryLevel = appStore.status.batteryLevel {
-                Text("\(Int((batteryLevel * 100).rounded()))%")
+                Text("\(PointFormat.roundedOrDash(batteryLevel * 100))%")
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundColor(colors.textDim)
             }
@@ -630,8 +691,17 @@ struct TrackMapView: UIViewRepresentable {
 
         private var isProgrammaticRegionChange = false
         private var lastAppliedCameraID: Int?
-        private var lastSnapshot: Snapshot?
+        private var lastTrackSnapshot: TrackSnapshot?
+        private var lastGeofenceSnapshot: GeofenceSnapshot?
         private var circleColorByObjectID: [ObjectIdentifier: String] = [:]
+        // Bookkeeping for the split-rebuild below: exactly what's currently on
+        // the map for each half, so each half can be torn down/rebuilt
+        // independently instead of via `mapView.overlays`/`mapView.annotations`
+        // (which mix both halves together).
+        private var trackAnnotations: [MKAnnotation] = []
+        private var geofencePinAnnotations: [GeofencePinAnnotation] = []
+        private var polylineOverlay: MKPolyline?
+        private var circleOverlays: [MKCircle] = []
 
         /// Marks the next `regionDidChangeAnimated` callback as ours — used
         /// both by `applyCameraIfNeeded` and by `makeUIView`'s own initial
@@ -639,16 +709,6 @@ struct TrackMapView: UIViewRepresentable {
         /// at all but is exactly as programmatic.
         func markProgrammaticRegionChange() {
             isProgrammaticRegionChange = true
-        }
-
-        struct Snapshot: Equatable {
-            let trackKeys: [String]
-            let eventKeys: [String]
-            let geofenceIDs: [String]
-            let geofenceColors: [String]
-            let lastKey: String?
-            let lastMoving: Bool?
-            let showPolyline: Int // polyline.count, coarse enough to detect on/off + growth
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -709,6 +769,12 @@ struct TrackMapView: UIViewRepresentable {
             abs(a.latitude - b.latitude) < epsilon && abs(a.longitude - b.longitude) < epsilon
         }
 
+        /// Rebuilds overlays/annotations, but ONLY the half whose own change
+        /// key actually changed — see `GeofenceSnapshot`/`TrackSnapshot`'s doc
+        /// comments for why this split exists. Without it, every incoming
+        /// location fix (which changes `TrackSnapshot` on ~every call) also
+        /// tore down the geofence pins, dismissing an open callout out from
+        /// under the user mid-tap.
         func applyOverlaysAndAnnotationsIfNeeded(
             mapView: MKMapView,
             polyline: [CLLocationCoordinate2D],
@@ -719,43 +785,75 @@ struct TrackMapView: UIViewRepresentable {
             lastPoint: Point?,
             isMoving: Bool
         ) {
-            let geofenceColors = geofences.map(\.identifier).map(geofenceColorHex)
-            let snapshot = Snapshot(
+            let geofenceSnapshot = GeofenceSnapshot(
+                geofenceIDs: geofences.map(\.identifier),
+                geofenceColors: geofences.map(\.identifier).map(geofenceColorHex)
+            )
+            let trackSnapshot = TrackSnapshot(
                 trackKeys: trackPoints.map { $0.uuid ?? $0.timestamp },
                 eventKeys: geofenceEvents.map { ($0.0.uuid ?? $0.0.timestamp) + "|" + $0.1 },
-                geofenceIDs: geofences.map(\.identifier),
-                geofenceColors: geofenceColors,
                 lastKey: lastPoint.map { $0.uuid ?? $0.timestamp },
                 lastMoving: lastPoint == nil ? nil : isMoving,
                 showPolyline: polyline.count
             )
-            guard snapshot != lastSnapshot else { return }
-            lastSnapshot = snapshot
+            let decision = MapRebuild.decide(
+                track: trackSnapshot,
+                previousTrack: lastTrackSnapshot,
+                geofences: geofenceSnapshot,
+                previousGeofences: lastGeofenceSnapshot
+            )
+            guard decision.rebuildTrack || decision.rebuildGeofences else { return }
 
-            mapView.removeOverlays(mapView.overlays)
-            circleColorByObjectID.removeAll()
-            if polyline.count > 1 {
-                mapView.addOverlay(MKPolyline(coordinates: polyline, count: polyline.count))
-            }
-            for geofence in geofences {
-                let circle = MKCircle(
-                    center: CLLocationCoordinate2D(latitude: geofence.latitude, longitude: geofence.longitude),
-                    radius: geofence.radius
-                )
-                circleColorByObjectID[ObjectIdentifier(circle)] = geofenceColorHex(geofence.identifier)
-                mapView.addOverlay(circle)
+            if decision.rebuildGeofences {
+                lastGeofenceSnapshot = geofenceSnapshot
+
+                if !circleOverlays.isEmpty {
+                    mapView.removeOverlays(circleOverlays)
+                }
+                circleColorByObjectID.removeAll()
+                circleOverlays = geofences.map { geofence in
+                    let circle = MKCircle(
+                        center: CLLocationCoordinate2D(latitude: geofence.latitude, longitude: geofence.longitude),
+                        radius: geofence.radius
+                    )
+                    circleColorByObjectID[ObjectIdentifier(circle)] = geofenceColorHex(geofence.identifier)
+                    return circle
+                }
+                if !circleOverlays.isEmpty {
+                    mapView.addOverlays(circleOverlays)
+                }
+
+                if !geofencePinAnnotations.isEmpty {
+                    mapView.removeAnnotations(geofencePinAnnotations)
+                }
+                geofencePinAnnotations = geofences.map { GeofencePinAnnotation(geofence: $0, hexColor: geofenceColorHex($0.identifier)) }
+                mapView.addAnnotations(geofencePinAnnotations)
             }
 
-            let toRemove = mapView.annotations.filter { !($0 is MKUserLocation) }
-            mapView.removeAnnotations(toRemove)
+            if decision.rebuildTrack {
+                lastTrackSnapshot = trackSnapshot
 
-            var newAnnotations: [MKAnnotation] = trackPoints.map { DotAnnotation(point: $0, kind: .track) }
-            newAnnotations += geofenceEvents.map { DotAnnotation(point: $0.0, kind: .geofenceEvent(hex: $0.1)) }
-            newAnnotations += geofences.map { GeofencePinAnnotation(geofence: $0, hexColor: geofenceColorHex($0.identifier)) }
-            if let lastPoint {
-                newAnnotations.append(DotAnnotation(point: lastPoint, kind: .last(moving: isMoving)))
+                if let polylineOverlay {
+                    mapView.removeOverlay(polylineOverlay)
+                    self.polylineOverlay = nil
+                }
+                if polyline.count > 1 {
+                    let newPolyline = MKPolyline(coordinates: polyline, count: polyline.count)
+                    mapView.addOverlay(newPolyline)
+                    polylineOverlay = newPolyline
+                }
+
+                if !trackAnnotations.isEmpty {
+                    mapView.removeAnnotations(trackAnnotations)
+                }
+                var newTrackAnnotations: [MKAnnotation] = trackPoints.map { DotAnnotation(point: $0, kind: .track) }
+                newTrackAnnotations += geofenceEvents.map { DotAnnotation(point: $0.0, kind: .geofenceEvent(hex: $0.1)) }
+                if let lastPoint {
+                    newTrackAnnotations.append(DotAnnotation(point: lastPoint, kind: .last(moving: isMoving)))
+                }
+                trackAnnotations = newTrackAnnotations
+                mapView.addAnnotations(newTrackAnnotations)
             }
-            mapView.addAnnotations(newAnnotations)
         }
 
         // MARK: MKMapViewDelegate

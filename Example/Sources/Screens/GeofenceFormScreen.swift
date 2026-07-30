@@ -137,11 +137,23 @@ public struct GeofenceFormScreen: View {
             error = "identifier and a positive radius are required"
             return
         }
-        busy = true
-        error = nil
 
         let trimmedLoitering = loiteringDelayText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let loiteringDelay = trimmedLoitering.isEmpty ? nil : parseDouble(trimmedLoitering)
+        var loiteringDelay: Double?
+        if !trimmedLoitering.isEmpty {
+            // Same guard as `radius` above: `Double("1e400")` returns
+            // `+infinity` rather than nil, and an infinite value reaching
+            // `JSONEncoder` inside `DeviceLink.deviceFetch`'s `try?` would
+            // make the geofence PUT go out with no body, silently.
+            guard let parsed = parseDouble(trimmedLoitering), parsed.isFinite else {
+                error = "loitering delay must be a finite number"
+                return
+            }
+            loiteringDelay = parsed
+        }
+
+        busy = true
+        error = nil
 
         let geofence = Geofence(
             identifier: trimmedIdentifier,

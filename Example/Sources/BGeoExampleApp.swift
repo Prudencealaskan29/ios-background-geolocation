@@ -38,6 +38,15 @@ struct BGeoExampleApp: App {
     private let deviceLink: DeviceLink
     private let geofences: Geofences
 
+    /// Guards `bootstrap()` against running twice. Unreachable today (one
+    /// `WindowGroup`), but `TARGETED_DEVICE_FAMILY: "1,2"` invites iPad, and a
+    /// second scene's `.task` re-running `bootstrap()` would re-subscribe
+    /// every event (doubling delivery, since `subscribeToEvents()`'s
+    /// `Subscription`s are never removed) and call `ready()`/`restore()`
+    /// again. `static` so it survives across scenes, which are separate
+    /// `WindowGroup` instances within the same process, not separate apps.
+    @MainActor private static var hasBootstrapped = false
+
     init() {
         // `DeviceLink`/`Geofences` need the SAME `AppStore` instance the view
         // hierarchy observes, so it's built here (not via `AppStore()` a
@@ -67,6 +76,9 @@ struct BGeoExampleApp: App {
     // MARK: - Bootstrap
 
     private func bootstrap() async {
+        guard !Self.hasBootstrapped else { return }
+        Self.hasBootstrapped = true
+
         subscribeToEvents()
         _ = await deviceLink.restore()
 
@@ -99,9 +111,17 @@ struct BGeoExampleApp: App {
                 event: location.event
             ))
             appStore.setStatus(isMoving: location.isMoving, batteryLevel: location.battery.level)
+            var data: [String: Any] = [
+                "lat": location.coords.latitude,
+                "lng": location.coords.longitude,
+                "accuracy": location.coords.accuracy,
+                "isMoving": location.isMoving,
+            ]
+            if let extras = location.extras { data["extras"] = extras }
             log(
                 "onLocation",
                 String(format: "%.6f, %.6f ±%.0fm", location.coords.latitude, location.coords.longitude, location.coords.accuracy),
+                data: data,
                 .debug
             )
         }
@@ -116,17 +136,26 @@ struct BGeoExampleApp: App {
         }
 
         BackgroundGeolocation.onProviderChange { event in
-            log("onProviderChange", "status=\(event.status)", .warn)
+            var data: [String: Any] = [
+                "status": event.status.rawValue,
+                "enabled": event.enabled,
+                "gps": event.gps,
+                "network": event.network,
+            ]
+            if let accuracyAuthorization = event.accuracyAuthorization { data["accuracyAuthorization"] = accuracyAuthorization.rawValue }
+            log("onProviderChange", "status=\(event.status)", data: data, .warn)
         }
 
         BackgroundGeolocation.onAuthorization { event in
             let failed = (event["success"] as? Bool) == false
-            log("onAuthorization", failed ? "failed" : "refreshed", failed ? .error : .info)
+            log("onAuthorization", failed ? "failed" : "refreshed", data: event, failed ? .error : .info)
             Task { await deviceLink.persistRotatedTokens(event) }
         }
 
         BackgroundGeolocation.onGeofence { event in
-            log("onGeofence", "\(event.action.rawValue) \(event.identifier)", .info)
+            var data: [String: Any] = ["identifier": event.identifier, "action": event.action.rawValue]
+            if let extras = event.extras { data["extras"] = extras }
+            log("onGeofence", "\(event.action.rawValue) \(event.identifier)", data: data, .info)
             // Geofence transitions don't ride `onLocation` — append the point
             // here so the map and coordinates table show them (same as
             // React Native's `App.tsx` and the web console).
@@ -152,15 +181,16 @@ struct BGeoExampleApp: App {
         }
 
         BackgroundGeolocation.onHttp { event in
-            log("onHttp", "\(event.status) \(event.success ? "ok" : "fail")", event.success ? .debug : .warn)
+            let data: [String: Any] = ["status": event.status, "success": event.success, "responseText": event.responseText]
+            log("onHttp", "\(event.status) \(event.success ? "ok" : "fail")", data: data, event.success ? .debug : .warn)
         }
 
         BackgroundGeolocation.onConnectivityChange { event in
-            log("onConnectivityChange", "connected=\(event.connected)", event.connected ? .info : .warn)
+            log("onConnectivityChange", "connected=\(event.connected)", data: ["connected": event.connected], event.connected ? .info : .warn)
         }
     }
 
-    private func log(_ event: String, _ message: String?, _ level: LogLevel) {
-        LogUploader.logEvent(event, message: message, level: level, store: appStore)
+    private func log(_ event: String, _ message: String?, data: Any? = nil, _ level: LogLevel) {
+        LogUploader.logEvent(event, message: message, data: data, level: level, store: appStore)
     }
 }

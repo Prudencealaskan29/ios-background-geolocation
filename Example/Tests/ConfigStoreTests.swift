@@ -28,10 +28,10 @@ final class ConfigStoreTests: XCTestCase {
 
     // MARK: - persistence round-trip
 
-    func testOverrideRoundTripsThroughPersistenceAcrossFreshInstances() async {
+    func testOverrideRoundTripsThroughPersistenceAcrossFreshInstances() async throws {
         let store = makeStore()
-        await store.setOverride("distanceFilter", 42.0)
-        await store.setOverride("debug", false)
+        try await store.setOverride("distanceFilter", 42.0)
+        try await store.setOverride("debug", false)
 
         // A brand new ConfigStore instance, same UserDefaults suite — not
         // just re-reading the same instance, which would prove nothing about
@@ -46,21 +46,61 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertTrue(store.overrides.isEmpty)
     }
 
-    func testSetOverridePushesLiveConfigImmediately() async {
+    func testSetOverridePushesLiveConfigImmediately() async throws {
         let store = makeStore()
         var captured: Config?
         store.applyConfig = { config in captured = config }
 
-        await store.setOverride("distanceFilter", 42.0)
+        try await store.setOverride("distanceFilter", 42.0)
 
         XCTAssertEqual(captured?.distanceFilter, 42.0)
     }
 
+    // MARK: - setOverride() apply-before-persist ordering (a rejected setConfig
+    // must not linger as a persisted override — see ConfigStore.setOverride's
+    // doc comment).
+
+    func testRejectedSetOverrideThrowsAndLeavesNoTraceInMemoryOrStorage() async {
+        let store = makeStore()
+        struct BoomError: Error {}
+        store.applyConfig = { _ in throw BoomError() }
+
+        do {
+            try await store.setOverride("distanceFilter", 42.0)
+            XCTFail("expected setOverride to rethrow the applyConfig failure")
+        } catch is BoomError {
+            // expected
+        } catch {
+            XCTFail("expected BoomError, got \(error)")
+        }
+
+        XCTAssertNil(store.overrides["distanceFilter"], "a rejected setConfig must not leave an in-memory override")
+
+        let fresh = ConfigStore(userDefaults: defaults)
+        XCTAssertNil(fresh.overrides["distanceFilter"], "a rejected setConfig must not persist an override either")
+    }
+
+    func testSuccessfulSetOverrideAfterAPriorRejectionStillPersists() async throws {
+        // Guards against a fix that accidentally makes setOverride permanently
+        // stuck after one failure (e.g. by mutating `overrides` before the
+        // throw): the NEXT call, with a working `applyConfig`, must succeed
+        // normally.
+        let store = makeStore()
+        struct BoomError: Error {}
+        store.applyConfig = { _ in throw BoomError() }
+        _ = try? await store.setOverride("distanceFilter", 42.0)
+
+        store.applyConfig = { _ in }
+        try await store.setOverride("distanceFilter", 99.0)
+
+        XCTAssertEqual(store.overrides["distanceFilter"] as? Double, 99.0)
+    }
+
     // MARK: - merged()
 
-    func testMergedAppliesOverrideOverBaseAndLeavesUntouchedKeysAlone() async {
+    func testMergedAppliesOverrideOverBaseAndLeavesUntouchedKeysAlone() async throws {
         let store = makeStore()
-        await store.setOverride("distanceFilter", 42.0)
+        try await store.setOverride("distanceFilter", 42.0)
 
         let base = Config(distanceFilter: 10, stopTimeout: 5, debug: true)
         let merged = store.merged(into: base)
@@ -80,14 +120,14 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(merged.stationaryDesiredAccuracy, "LOW")
     }
 
-    func testMergedNotificationOverlayLeavesBaseSiblingFieldsAlone() async {
+    func testMergedNotificationOverlayLeavesBaseSiblingFieldsAlone() async throws {
         // The critical case `overlayNotificationOverrides` exists for: base
         // already set notification.channelId (not via this store), and only
         // notification.priority is overridden. The channelId must survive —
         // NOT get reset to the schema default, which would be the wrong
         // (PATCH-oriented) behaviour for a boot-time merge.
         let store = makeStore()
-        await store.setOverride("notification.priority", 1)
+        try await store.setOverride("notification.priority", 1)
 
         let base = Config(notification: NotificationConfig(channelId: "custom-channel"))
         let merged = store.merged(into: base)
@@ -106,10 +146,10 @@ final class ConfigStoreTests: XCTestCase {
 
     // MARK: - reset()
 
-    func testResetClearsOverridesAndDoesNotSurviveAFreshInstance() async {
+    func testResetClearsOverridesAndDoesNotSurviveAFreshInstance() async throws {
         let store = makeStore()
-        await store.setOverride("distanceFilter", 42.0)
-        await store.setOverride("debug", false)
+        try await store.setOverride("distanceFilter", 42.0)
+        try await store.setOverride("debug", false)
         XCTAssertFalse(store.overrides.isEmpty)
 
         await store.reset()
@@ -121,8 +161,8 @@ final class ConfigStoreTests: XCTestCase {
 
     func testResetPushesDefaultsForPreviouslyOverriddenKeys() async throws {
         let store = makeStore()
-        await store.setOverride("distanceFilter", 42.0)
-        await store.setOverride("debug", false)
+        try await store.setOverride("distanceFilter", 42.0)
+        try await store.setOverride("debug", false)
 
         var captured: Config?
         store.applyConfig = { config in captured = config }
@@ -150,7 +190,7 @@ final class ConfigStoreTests: XCTestCase {
         var captured: Config?
         store.applyConfig = { config in captured = config }
 
-        await store.setOverride("notification.priority", 2)
+        try await store.setOverride("notification.priority", 2)
 
         let notification = try XCTUnwrap(captured?.notification)
         let dictionary = notification.toDictionary()
@@ -167,13 +207,13 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(dictionary["color"] as? String, "")
     }
 
-    func testNotificationOverrideLivePatchPrefersExistingOverrideOverDefaultForSiblings() async {
+    func testNotificationOverrideLivePatchPrefersExistingOverrideOverDefaultForSiblings() async throws {
         let store = makeStore()
-        await store.setOverride("notification.title", "Custom title")
+        try await store.setOverride("notification.title", "Custom title")
 
         var captured: Config?
         store.applyConfig = { config in captured = config }
-        await store.setOverride("notification.priority", 1)
+        try await store.setOverride("notification.priority", 1)
 
         // The sibling `title` override set a moment ago must survive into
         // THIS patch too, not get reset to the schema default.
@@ -192,11 +232,11 @@ final class ConfigStoreTests: XCTestCase {
     // `overlayNotificationOverrides` was written to avoid, but on the scalar
     // switch rather than the notification one.
 
-    func testTypeMismatchedScalarOverrideDoesNotClobberBaseValueOnMergedPath() async {
+    func testTypeMismatchedScalarOverrideDoesNotClobberBaseValueOnMergedPath() async throws {
         let store = makeStore()
         // Simulates the legacy numeric stationaryDesiredAccuracy sitting in
         // UserDefaults from before the phase-0 string-enum fix.
-        await store.setOverride("stationaryDesiredAccuracy", -1)
+        try await store.setOverride("stationaryDesiredAccuracy", -1)
 
         let base = Config(stationaryDesiredAccuracy: "BALANCED")
         let merged = store.merged(into: base)
@@ -204,9 +244,9 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(merged.stationaryDesiredAccuracy, "BALANCED", "a type-mismatched override must not erase base's value")
     }
 
-    func testTypeMismatchedNotificationOverrideDoesNotClobberBaseSiblingOnMergedPath() async {
+    func testTypeMismatchedNotificationOverrideDoesNotClobberBaseSiblingOnMergedPath() async throws {
         let store = makeStore()
-        await store.setOverride("notification.priority", "not-a-number")
+        try await store.setOverride("notification.priority", "not-a-number")
 
         let base = Config(notification: NotificationConfig(priority: 1))
         let merged = store.merged(into: base)
@@ -270,12 +310,12 @@ final class ConfigStoreTests: XCTestCase {
     // (not asserted by inspection — this is a live round-trip test, so a
     // missing/mistyped switch case fails it).
 
-    func testEveryNonNotificationSchemaKeyRoundTripsThroughMerged() async {
+    func testEveryNonNotificationSchemaKeyRoundTripsThroughMerged() async throws {
         let store = makeStore()
         var expected: [String: Any] = [:]
         for field in Self.nonNotificationFields {
             let value = Self.distinctOverride(for: field)
-            await store.setOverride(field.key, value)
+            try await store.setOverride(field.key, value)
             expected[field.key] = value
         }
 
@@ -286,13 +326,13 @@ final class ConfigStoreTests: XCTestCase {
         }
     }
 
-    func testEveryNotificationSchemaKeyRoundTripsThroughMerged() async {
+    func testEveryNotificationSchemaKeyRoundTripsThroughMerged() async throws {
         let store = makeStore()
         let notificationFields = configSections.first(where: { $0.title == "Notification" })!.fields
         var expected: [String: Any] = [:]
         for field in notificationFields {
             let value = Self.distinctOverride(for: field)
-            await store.setOverride(field.key, value)
+            try await store.setOverride(field.key, value)
             expected[field.key] = value
         }
 

@@ -154,7 +154,12 @@ public enum ConfigCoerce {
     public static func int(_ value: Any) -> Int? {
         if let v = value as? Int { return v }
         if let v = value as? NSNumber { return v.intValue }
-        if let v = value as? Double { return Int(v) }
+        // `Int(exactly:)`-guarded, same class of fix as `numberFromText`/
+        // `displayString` above: a bare `Int(v)` traps on an out-of-range
+        // `Double`. Rounds first so an integral-valued Double (42.0) still
+        // coerces, matching the old truncating behaviour for the only inputs
+        // this path is actually reachable for.
+        if let v = value as? Double { return Int(exactly: v.rounded()) }
         return nil
     }
 
@@ -251,7 +256,10 @@ public let configSections: [ConfigSection] = [
     ConfigSection("Geolocation", [
         ConfigField(key: "desiredAccuracy", label: "Desired accuracy", type: .enumeration, options: accuracyOptions, defaultValue: .int(DesiredAccuracy.high.rawValue)),
         ConfigField(key: "distanceFilter", label: "Distance filter", type: .number, defaultValue: .double(10), unit: "m"),
-        ConfigField(key: "stationaryRadius", label: "Stationary radius", type: .number, defaultValue: .double(25), unit: "m"),
+        ConfigField(
+            key: "stationaryRadius", label: "Stationary radius", type: .number, defaultValue: .double(200), unit: "m",
+            hint: "CORRECTED — engine default 200 (core/ios/Sources/BGGeoEngine.mm:793), not the RN/Flutter schemas' 25"
+        ),
         ConfigField(key: "stationaryDistanceFilter", label: "Stationary distance filter", type: .number, defaultValue: .double(75), unit: "m"),
         ConfigField(key: "stationaryDesiredAccuracy", label: "Stationary accuracy", type: .enumeration, options: stationaryAccuracyOptions, defaultValue: .string("BALANCED")),
         ConfigField(key: "stationaryKeepAlive", label: "Stationary keep-alive", type: .bool, defaultValue: .bool(true)),
@@ -279,7 +287,10 @@ public let configSections: [ConfigSection] = [
     ConfigSection("Motion / Activity", [
         ConfigField(key: "stopTimeout", label: "Stop timeout", type: .number, defaultValue: .int(5), unit: "min"),
         ConfigField(key: "motionTriggerDelay", label: "Motion trigger delay", type: .number, defaultValue: .int(0), unit: "ms"),
-        ConfigField(key: "minimumActivityRecognitionConfidence", label: "Min AR confidence", type: .number, defaultValue: .int(75), unit: "%"),
+        ConfigField(
+            key: "minimumActivityRecognitionConfidence", label: "Min AR confidence", type: .number, defaultValue: .int(50), unit: "%",
+            hint: "CORRECTED — iOS engine default 50 (core/ios/Sources/BGGeoEngine.mm:1556); Android's default is 75, RN/Flutter schemas wrongly used that here"
+        ),
         ConfigField(key: "disableMotionActivityUpdates", label: "Disable motion updates", type: .bool, defaultValue: .bool(false)),
         ConfigField(key: "preventSuspend", label: "Prevent suspend", type: .bool, defaultValue: .bool(false), platform: .ios),
         ConfigField(
@@ -301,8 +312,14 @@ public let configSections: [ConfigSection] = [
         ConfigField(key: "autoSyncThreshold", label: "Auto-sync threshold", type: .number, defaultValue: .int(0)),
         ConfigField(key: "disableAutoSyncOnCellular", label: "Wi-Fi-only auto sync", type: .bool, defaultValue: .bool(false), hint: "explicit Sync still uploads on cellular"),
         ConfigField(key: "batchSync", label: "Batch sync", type: .bool, defaultValue: .bool(false)),
-        ConfigField(key: "maxBatchSize", label: "Max batch size", type: .number, defaultValue: .int(50)),
-        ConfigField(key: "httpTimeoutMs", label: "HTTP timeout", type: .number, defaultValue: .int(60000), unit: "ms"),
+        ConfigField(
+            key: "maxBatchSize", label: "Max batch size", type: .number, defaultValue: .int(-1),
+            hint: "CORRECTED — engine default -1/unbatched (core/ios/Sources/BGGeoHttpStore.mm:74,183), not the RN/Flutter schemas' 50; DeviceLink sets 50 once linked, independently of this default"
+        ),
+        ConfigField(
+            key: "httpTimeoutMs", label: "HTTP timeout", type: .number, defaultValue: .int(30000), unit: "ms",
+            hint: "CORRECTED — engine default 30000 (core/ios/Sources/BGGeoHttpStore.mm:185), not the RN/Flutter schemas' 60000"
+        ),
         ConfigField(
             key: "httpRootProperty", label: "HTTP root property", type: .string, defaultValue: .string("location"),
             hint: "ADDED — \".\" merges a single record into the root"

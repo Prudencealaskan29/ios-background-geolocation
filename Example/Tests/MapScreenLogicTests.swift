@@ -47,6 +47,72 @@ final class MapScreenLogicTests: XCTestCase {
         XCTAssertEqual(window.effPage, 0)
     }
 
+    // MARK: - MapRebuild.decide (the geofence-pin-churn fix)
+    //
+    // IMPORTANT-1 from the final review: a live location fix must NOT
+    // invalidate the geofence pins/circles, or an open callout is dismissed
+    // out from under the user before they can tap the ⓘ accessory. These
+    // tests exercise the pure decision function directly — the `MKMapView`
+    // wiring around it is view code with no unit tests, same rule as
+    // `MapPaging` above.
+
+    private func trackSnapshot(lastKey: String? = "a") -> TrackSnapshot {
+        TrackSnapshot(trackKeys: ["a", "b"], eventKeys: [], lastKey: lastKey, lastMoving: true, showPolyline: 2)
+    }
+
+    private func geofenceSnapshot(ids: [String] = ["home"], colors: [String] = [GeofenceColors.fallback]) -> GeofenceSnapshot {
+        GeofenceSnapshot(geofenceIDs: ids, geofenceColors: colors)
+    }
+
+    func testANewLocationFixAloneDoesNotRequestAGeofenceRebuild() {
+        let geofences = geofenceSnapshot()
+        let decision = MapRebuild.decide(
+            track: trackSnapshot(lastKey: "new-fix"),
+            previousTrack: trackSnapshot(lastKey: "previous-fix"),
+            geofences: geofences,
+            previousGeofences: geofences
+        )
+        XCTAssertTrue(decision.rebuildTrack, "the track/last-point marker must still update")
+        XCTAssertFalse(decision.rebuildGeofences, "unchanged geofences must not be torn down by an unrelated location fix")
+    }
+
+    func testAGeofenceTransitionRequestsAGeofenceRebuildEvenWithNoTrackChange() {
+        let track = trackSnapshot()
+        let decision = MapRebuild.decide(
+            track: track,
+            previousTrack: track,
+            geofences: geofenceSnapshot(colors: [GeofenceColors.enter]),
+            previousGeofences: geofenceSnapshot(colors: [GeofenceColors.fallback])
+        )
+        XCTAssertFalse(decision.rebuildTrack)
+        XCTAssertTrue(decision.rebuildGeofences, "a real geofence color/set change must still rebuild the pins")
+    }
+
+    func testIdenticalSnapshotsRequestNoRebuildAtAll() {
+        let track = trackSnapshot()
+        let geofences = geofenceSnapshot()
+        let decision = MapRebuild.decide(track: track, previousTrack: track, geofences: geofences, previousGeofences: geofences)
+        XCTAssertFalse(decision.rebuildTrack)
+        XCTAssertFalse(decision.rebuildGeofences)
+    }
+
+    func testNoPreviousSnapshotRequestsARebuildOfBoth() {
+        let decision = MapRebuild.decide(track: trackSnapshot(), previousTrack: nil, geofences: geofenceSnapshot(), previousGeofences: nil)
+        XCTAssertTrue(decision.rebuildTrack, "first layout must draw the track")
+        XCTAssertTrue(decision.rebuildGeofences, "first layout must draw the geofences")
+    }
+
+    func testAddingOrRemovingAGeofenceRequestsAGeofenceRebuild() {
+        let track = trackSnapshot()
+        let decision = MapRebuild.decide(
+            track: track,
+            previousTrack: track,
+            geofences: geofenceSnapshot(ids: ["home", "work"], colors: [GeofenceColors.fallback, GeofenceColors.fallback]),
+            previousGeofences: geofenceSnapshot(ids: ["home"], colors: [GeofenceColors.fallback])
+        )
+        XCTAssertTrue(decision.rebuildGeofences)
+    }
+
     // MARK: - GeofenceColors
 
     func testGeofenceColorsMapEachActionCaseInsensitively() {

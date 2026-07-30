@@ -49,11 +49,20 @@ public final class ConfigStore: ObservableObject {
 
     // MARK: - Public API
 
-    /// Apply one config key right away (live `setConfig`) and persist it.
-    public func setOverride(_ key: String, _ value: Any) async {
-        overrides[key] = value
+    /// Apply one config key right away (live `setConfig`) and, ONLY once the
+    /// engine has actually accepted it, persist it. Mirrors `configStore.ts`'s
+    /// `applyOverride`: build the candidate patch, await `setConfig` FIRST,
+    /// and commit the override (in-memory + storage) only on success. Doing
+    /// it the other way around — persist, then best-effort apply — leaves a
+    /// REJECTED key sitting in `overrides` forever: it gets silently
+    /// re-applied to the engine on every future boot via `merged(into:)`,
+    /// while the caller has no way to know it never actually took.
+    public func setOverride(_ key: String, _ value: Any) async throws {
+        var candidate = overrides
+        candidate[key] = value
+        try await applyConfig(patch(forChangedKey: key, overrides: candidate))
+        overrides = candidate
         persist()
-        try? await applyConfig(patch(forChangedKey: key))
     }
 
     /// Drop all overrides, pushing each previously-overridden key's default
@@ -96,7 +105,11 @@ public final class ConfigStore: ObservableObject {
     // whole `Config` from scratch (no existing engine state to clobber), so
     // it only needs to overlay what's actually overridden.
 
-    private func patch(forChangedKey key: String) -> Config {
+    /// `overrides` is passed explicitly (the CANDIDATE dictionary, not
+    /// `self.overrides`) so `setOverride` can build the patch to try BEFORE
+    /// committing anything to the published property — see that method's
+    /// doc comment.
+    private func patch(forChangedKey key: String, overrides: [String: Any]) -> Config {
         var patch = Config()
         if key.hasPrefix("notification.") {
             patch.notification = fullNotificationPatch(source: overrides)

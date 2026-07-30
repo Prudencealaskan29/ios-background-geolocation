@@ -42,6 +42,7 @@ public struct SettingsScreen: View {
     private let deviceLink: DeviceLink
 
     @Environment(\.colorScheme) private var systemColorScheme
+    @SwiftUI.State private var configError: String?
 
     public init(appStore: AppStore, configStore: ConfigStore, themeStore: ThemeStore, deviceLink: DeviceLink) {
         self.appStore = appStore
@@ -88,6 +89,13 @@ public struct SettingsScreen: View {
                     }
                 }
 
+                if let configError {
+                    Text(configError)
+                        .font(.system(size: 13))
+                        .foregroundColor(colors.dangerText)
+                        .padding(.bottom, 12)
+                }
+
                 Button("Reset config to defaults") {
                     Task {
                         await configStore.reset()
@@ -108,10 +116,20 @@ public struct SettingsScreen: View {
         configStore.overrides[field.key] ?? field.defaultValue.any
     }
 
+    /// Mirrors `LinkSection.link()`'s error handling: log the event only on
+    /// success (never claim a rejected `setConfig` "worked"), and surface a
+    /// failure inline the same way a failed link does — no log call on that
+    /// path either, since `ConfigStore.setOverride` guarantees a throw left
+    /// no persisted override behind.
     private func setValue(_ field: ConfigField, _ raw: Any) {
         Task {
-            await configStore.setOverride(field.key, raw)
-            logEvent("setConfig", "\(field.key)=\(raw)", level: .info)
+            do {
+                try await configStore.setOverride(field.key, raw)
+                configError = nil
+                logEvent("setConfig", "\(field.key)=\(raw)", level: .info)
+            } catch {
+                configError = error.localizedDescription
+            }
         }
     }
 
