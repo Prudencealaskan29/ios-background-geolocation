@@ -19,6 +19,9 @@ import _SwiftConcurrencyShims
   @objc final public var isRunning: Swift.Bool {
     get
   }
+  @objc final public var backgroundActivityActive: Swift.Bool {
+    get
+  }
   @objc final public var foregroundBorn: Swift.Bool {
     get
   }
@@ -29,7 +32,8 @@ import _SwiftConcurrencyShims
     get
   }
   @objc final public func updateServiceSession(authorizedAlways: Swift.Bool)
-  @objc final public func start(foregroundBorn: Swift.Bool, authorizedAlways: Swift.Bool, onLocation: @escaping (_LocationEssentials.CLLocation) -> Swift.Void, onStationary: @escaping () -> Swift.Void)
+  @objc final public func updateBackgroundActivity(needed: Swift.Bool)
+  @objc final public func start(foregroundBorn: Swift.Bool, authorizedAlways: Swift.Bool, backgroundActivity: Swift.Bool, onLocation: @escaping (_LocationEssentials.CLLocation) -> Swift.Void, onStationary: @escaping () -> Swift.Void)
   @objc final public func stop()
   @objc override dynamic public init()
   @objc deinit

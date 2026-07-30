@@ -388,11 +388,13 @@ SWIFT_CLASS_NAMED("BGGeoLicense")
 SWIFT_CLASS_NAMED("BGGeoSessionStream")
 @interface BGGeoSessionStream : NSObject
 @property (nonatomic, readonly) BOOL isRunning;
+@property (nonatomic, readonly) BOOL backgroundActivityActive;
 @property (nonatomic, readonly) BOOL foregroundBorn;
 @property (nonatomic, readonly) BOOL serviceSessionActive;
 @property (nonatomic, readonly) BOOL serviceSessionAlways;
 - (void)updateServiceSessionWithAuthorizedAlways:(BOOL)authorizedAlways;
-- (void)startWithForegroundBorn:(BOOL)foregroundBorn authorizedAlways:(BOOL)authorizedAlways onLocation:(void (^ _Nonnull)(CLLocation * _Nonnull))onLocation onStationary:(void (^ _Nonnull)(void))onStationary;
+- (void)updateBackgroundActivityWithNeeded:(BOOL)needed;
+- (void)startWithForegroundBorn:(BOOL)foregroundBorn authorizedAlways:(BOOL)authorizedAlways backgroundActivity:(BOOL)backgroundActivity onLocation:(void (^ _Nonnull)(CLLocation * _Nonnull))onLocation onStationary:(void (^ _Nonnull)(void))onStationary;
 - (void)stop;
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
 @end

@@ -280,6 +280,58 @@
           },
           {
             "kind": "Var",
+            "name": "backgroundActivityActive",
+            "printedName": "backgroundActivityActive",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "c:@M@BGeoCore@objc(cs)BGGeoSessionStream(py)backgroundActivityActive",
+            "mangledName": "$s8BGeoCore18BGGeoSessionStreamC24backgroundActivityActiveSbvp",
+            "moduleName": "BGeoCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "Final",
+              "HasStorage",
+              "SetterAccess",
+              "AccessControl",
+              "ObjC",
+              "RawDocComment"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "c:@M@BGeoCore@objc(cs)BGGeoSessionStream(im)backgroundActivityActive",
+                "mangledName": "$s8BGeoCore18BGGeoSessionStreamC24backgroundActivityActiveSbvg",
+                "moduleName": "BGeoCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Final",
+                  "ObjC"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
             "name": "foregroundBorn",
             "printedName": "foregroundBorn",
             "children": [
@@ -464,13 +516,49 @@
           },
           {
             "kind": "Function",
-            "name": "start",
-            "printedName": "start(foregroundBorn:authorizedAlways:onLocation:onStationary:)",
+            "name": "updateBackgroundActivity",
+            "printedName": "updateBackgroundActivity(needed:)",
             "children": [
               {
                 "kind": "TypeNominal",
                 "name": "Void",
                 "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "c:@M@BGeoCore@objc(cs)BGGeoSessionStream(im)updateBackgroundActivityWithNeeded:",
+            "mangledName": "$s8BGeoCore18BGGeoSessionStreamC24updateBackgroundActivity6neededySb_tF",
+            "moduleName": "BGeoCore",
+            "objc_name": "updateBackgroundActivityWithNeeded:",
+            "declAttributes": [
+              "Final",
+              "AccessControl",
+              "ObjC",
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "start",
+            "printedName": "start(foregroundBorn:authorizedAlways:backgroundActivity:onLocation:onStationary:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
               },
               {
                 "kind": "TypeNominal",
@@ -521,10 +609,10 @@
               }
             ],
             "declKind": "Func",
-            "usr": "c:@M@BGeoCore@objc(cs)BGGeoSessionStream(im)startWithForegroundBorn:authorizedAlways:onLocation:onStationary:",
-            "mangledName": "$s8BGeoCore18BGGeoSessionStreamC5start14foregroundBorn16authorizedAlways10onLocation0K10StationaryySb_SbySo10CLLocationCcyyctF",
+            "usr": "c:@M@BGeoCore@objc(cs)BGGeoSessionStream(im)startWithForegroundBorn:authorizedAlways:backgroundActivity:onLocation:onStationary:",
+            "mangledName": "$s8BGeoCore18BGGeoSessionStreamC5start14foregroundBorn16authorizedAlways18backgroundActivity10onLocation0M10StationaryySb_S2bySo10CLLocationCcyyctF",
             "moduleName": "BGeoCore",
-            "objc_name": "startWithForegroundBorn:authorizedAlways:onLocation:onStationary:",
+            "objc_name": "startWithForegroundBorn:authorizedAlways:backgroundActivity:onLocation:onStationary:",
             "declAttributes": [
               "Final",
               "AccessControl",
@@ -683,21 +771,28 @@
     {
       "filePath": "\/Users\/dc\/projects\/bgeo\/core\/ios\/Sources\/BGGeoSessionStream.swift",
       "kind": "BooleanLiteral",
-      "offset": 1677,
+      "offset": 1604,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/dc\/projects\/bgeo\/core\/ios\/Sources\/BGGeoSessionStream.swift",
       "kind": "BooleanLiteral",
-      "offset": 1744,
+      "offset": 1977,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/dc\/projects\/bgeo\/core\/ios\/Sources\/BGGeoSessionStream.swift",
       "kind": "BooleanLiteral",
-      "offset": 1811,
+      "offset": 2044,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/dc\/projects\/bgeo\/core\/ios\/Sources\/BGGeoSessionStream.swift",
+      "kind": "BooleanLiteral",
+      "offset": 2111,
       "length": 5,
       "value": "false"
     }
