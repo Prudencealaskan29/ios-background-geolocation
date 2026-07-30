@@ -236,6 +236,35 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertNil(ConfigCoerce.numberFromText("not-a-number", matching: .int(5)))
     }
 
+    // MARK: - display-string formatting must never crash either (the same
+    // crash class as numberFromText, on the read side). numberFromText
+    // deliberately lets a huge magnitude through for `.double`-kind fields
+    // (a Double never traps on write) — so the very next render of that
+    // field has to format it, and the naive `String(Int(v))` traps exactly
+    // where `numberFromText`'s naive `Int(parsed)` used to.
+
+    func testDisplayStringFormatsHugeDoubleWithoutTrappingInsteadOfCrashing() {
+        // Reachable by typing 22 digits into ANY .double-kind field
+        // (distanceFilter, stationaryRadius, locationFilterMaxAccuracy, ...)
+        // — numberFromText lets this straight into `overrides` as a Double.
+        let huge = 1.1e21
+        XCTAssertEqual(ConfigCoerce.displayString(for: huge), String(huge), "must fall back to the plain Double description, not trap")
+    }
+
+    func testDisplayStringRendersInRangeWholeDoubleWithoutTrailingDecimal() {
+        XCTAssertEqual(ConfigCoerce.displayString(for: 42.0), "42", "the original whole-number formatting intent must survive the fix")
+    }
+
+    func testDisplayStringRendersFractionalDoubleAsIs() {
+        XCTAssertEqual(ConfigCoerce.displayString(for: 42.5), "42.5")
+    }
+
+    func testDisplayStringRendersOtherValueKinds() {
+        XCTAssertEqual(ConfigCoerce.displayString(for: true), "true")
+        XCTAssertEqual(ConfigCoerce.displayString(for: "hello"), "hello")
+        XCTAssertEqual(ConfigCoerce.displayString(for: 7), "7")
+    }
+
     // MARK: - drift guard: every non-notification schema key maps to a real
     // Config property, exercised through the actual ConfigStore.apply switch
     // (not asserted by inspection — this is a live round-trip test, so a

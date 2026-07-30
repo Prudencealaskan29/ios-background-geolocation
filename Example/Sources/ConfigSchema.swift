@@ -184,6 +184,31 @@ public enum ConfigCoerce {
         }
         return Int(exactly: parsed.rounded())
     }
+
+    /// Renders a field's current value for display/editing. Same crash class
+    /// as `numberFromText`, on the output side: `numberFromText` deliberately
+    /// leaves `.double`-kind fields UNGUARDED on write (a `Double` never
+    /// traps), so an out-of-range magnitude (e.g. 22 digits typed into
+    /// `distanceFilter`) lands in `overrides` successfully as `1.1e21`. The
+    /// NEXT render must not then trap trying to format it — `Int(exactly:)`
+    /// (not the bare `Int(_:)` initializer) guards that, falling back to the
+    /// plain `Double` description when the value can't be represented as an
+    /// `Int`. Whole-number `Double`s that DO fit still render without a
+    /// trailing ".0" (the original formatting intent).
+    public static func displayString(for value: Any) -> String {
+        switch value {
+        case let v as Bool: return v ? "true" : "false"
+        case let v as String: return v
+        case let v as Int: return String(v)
+        case let v as Double:
+            guard v.truncatingRemainder(dividingBy: 1) == 0, let whole = Int(exactly: v) else {
+                return String(v)
+            }
+            return String(whole)
+        case let v as NSNumber: return v.stringValue
+        default: return ""
+        }
+    }
 }
 
 // MARK: - Schema

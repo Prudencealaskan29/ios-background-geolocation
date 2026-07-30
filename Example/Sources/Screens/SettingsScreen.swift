@@ -253,16 +253,10 @@ private struct ConfigFieldRow: View {
     let colors: ThemeColors
     let onChange: (Any) -> Void
 
-    private var displayString: String {
-        switch value {
-        case let v as Bool: return v ? "true" : "false"
-        case let v as String: return v
-        case let v as Int: return String(v)
-        case let v as Double: return v.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(v)) : String(v)
-        case let v as NSNumber: return v.stringValue
-        default: return ""
-        }
-    }
+    // Delegates to `ConfigCoerce.displayString`, which is `Int(exactly:)`-guarded
+    // against out-of-range `Double`s (see that function's doc comment) —
+    // shared, and independently testable, rather than reimplemented per view.
+    private var displayString: String { ConfigCoerce.displayString(for: value) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
