@@ -194,6 +194,142 @@ final class MapScreenLogicTests: XCTestCase {
         XCTAssertTrue(circleBefore === circleAfter, "an unrelated location fix must not tear down/rebuild an unchanged geofence circle")
     }
 
+    // MARK: - Track-dot diffing (the "everything blinks while following" fix)
+    //
+    // The track half used to be rebuilt wholesale on every accepted fix:
+    // every dot annotation removed and a fresh one added, plus a new
+    // "last point" annotation. MapKit answered by destroying and re-hosting
+    // up to `MapPaging.pageSize` annotation views per fix, which is what the
+    // user saw as the marker, the polyline and the whole dot layer blinking.
+    // These tests pin the incremental behaviour that replaced it.
+
+    private func dotAnnotations(_ mapView: MKMapView) -> [DotAnnotation] {
+        mapView.annotations.compactMap { $0 as? DotAnnotation }
+    }
+
+    func testANewFixKeepsTheAlreadyDrawnTrackDotsAndOnlyAddsTheNewOne() {
+        let mapView = MKMapView()
+        let coordinator = TrackMapView.Coordinator()
+        let pointA = Point(uuid: "a", latitude: 1, longitude: 2, timestamp: "2026-07-01T00:00:00Z")
+        let pointB = Point(uuid: "b", latitude: 1.001, longitude: 2, timestamp: "2026-07-01T00:00:05Z")
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointA], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointA, isMoving: true
+        )
+        let dotForA = try! XCTUnwrap(dotAnnotations(mapView).first { $0.kind == .track })
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointA, pointB], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointB, isMoving: true
+        )
+
+        let trackDots = dotAnnotations(mapView).filter { $0.kind == .track }
+        XCTAssertEqual(trackDots.count, 2)
+        XCTAssertTrue(
+            trackDots.contains { $0 === dotForA },
+            "the dot already on the map must survive the next fix, not be torn down and recreated"
+        )
+    }
+
+    func testANewFixMovesTheSameLastPointAnnotationInsteadOfReplacingIt() {
+        let mapView = MKMapView()
+        let coordinator = TrackMapView.Coordinator()
+        let pointA = Point(uuid: "a", latitude: 1, longitude: 2, timestamp: "2026-07-01T00:00:00Z")
+        let pointB = Point(uuid: "b", latitude: 1.001, longitude: 2.002, timestamp: "2026-07-01T00:00:05Z")
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointA], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointA, isMoving: false
+        )
+        let markerBefore = try! XCTUnwrap(dotAnnotations(mapView).first { $0.kind == .last(moving: false) })
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointA, pointB], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointB, isMoving: true
+        )
+
+        let markers = dotAnnotations(mapView).filter { if case .last = $0.kind { return true } else { return false } }
+        XCTAssertEqual(markers.count, 1, "exactly one current-position marker, ever")
+        XCTAssertTrue(markers[0] === markerBefore, "the marker must be moved, not removed and re-added")
+        XCTAssertEqual(markerBefore.coordinate.latitude, 1.001)
+        XCTAssertEqual(markerBefore.coordinate.longitude, 2.002)
+        XCTAssertEqual(markerBefore.kind, .last(moving: true), "moving/stationary must still follow the fix")
+    }
+
+    func testADotThatLeavesTheWindowIsRemovedFromTheMap() {
+        let mapView = MKMapView()
+        let coordinator = TrackMapView.Coordinator()
+        let pointA = Point(uuid: "a", latitude: 1, longitude: 2, timestamp: "2026-07-01T00:00:00Z")
+        let pointB = Point(uuid: "b", latitude: 1.001, longitude: 2, timestamp: "2026-07-01T00:00:05Z")
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointA, pointB], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointB, isMoving: true
+        )
+        XCTAssertEqual(dotAnnotations(mapView).filter { $0.kind == .track }.count, 2)
+
+        // The window slid past `pointA` (what paging past `MapPaging.pageSize`
+        // points does) — its dot must go with it.
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [pointB], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointB, isMoving: true
+        )
+
+        let trackDots = dotAnnotations(mapView).filter { $0.kind == .track }
+        XCTAssertEqual(trackDots.count, 1)
+        XCTAssertEqual(trackDots.first?.point.uuid, "b")
+    }
+
+    /// Points carry no guaranteed-unique key (`uuid` is optional and the
+    /// fallback `timestamp` can repeat), so the diff's keying has to survive a
+    /// collision without silently dropping a dot.
+    func testTwoPointsSharingAKeyStillDrawTwoDots() {
+        let mapView = MKMapView()
+        let coordinator = TrackMapView.Coordinator()
+        let same = Point(latitude: 1, longitude: 2, timestamp: "2026-07-01T00:00:00Z")
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: [], trackPoints: [same, same], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: nil, isMoving: false
+        )
+
+        XCTAssertEqual(dotAnnotations(mapView).filter { $0.kind == .track }.count, 2)
+    }
+
+    func testTheTrackPolylineIsNeverAbsentBetweenTwoFixes() {
+        let mapView = MKMapView()
+        let coordinator = TrackMapView.Coordinator()
+        let line = [CLLocationCoordinate2D(latitude: 1, longitude: 2), CLLocationCoordinate2D(latitude: 1.001, longitude: 2)]
+        let pointA = Point(uuid: "a", latitude: 1, longitude: 2, timestamp: "2026-07-01T00:00:00Z")
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: line, trackPoints: [pointA], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointA, isMoving: true
+        )
+        let polylineBefore = try! XCTUnwrap(mapView.overlays.compactMap { $0 as? MKPolyline }.first)
+
+        coordinator.applyOverlaysAndAnnotationsIfNeeded(
+            mapView: mapView, polyline: line + [CLLocationCoordinate2D(latitude: 1.002, longitude: 2)],
+            trackPoints: [pointA], geofenceEvents: [],
+            geofences: [], geofenceColorHex: { _ in GeofenceColors.fallback },
+            lastPoint: pointA, isMoving: true
+        )
+
+        let polylines = mapView.overlays.compactMap { $0 as? MKPolyline }
+        XCTAssertEqual(polylines.count, 1, "the previous polyline must be removed once the new one is up")
+        XCTAssertFalse(polylines[0] === polylineBefore)
+        XCTAssertEqual(polylines[0].pointCount, 3)
+    }
+
     // MARK: - GeofenceColors
 
     func testGeofenceColorsMapEachActionCaseInsensitively() {

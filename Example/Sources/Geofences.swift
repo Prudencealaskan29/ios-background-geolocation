@@ -48,12 +48,25 @@ public final class Geofences {
 
     /// `geofences.ts`'s `syncGeofences`: read the SDK's current set, update
     /// the store, mirror the snapshot to the console. `putGeofences` is a
-    /// no-op (returns false) when not linked — its result is intentionally
-    /// discarded here, same as the RN original's fire-and-forget `await`.
+    /// no-op (returns false) when not linked.
+    ///
+    /// The RN original discards that result; this port logs it instead. A
+    /// rejected PUT (not linked, expired tokens, server down) is otherwise
+    /// completely invisible — the fence is on the device and drawn on the map,
+    /// the console just never hears about it, and there is nothing anywhere to
+    /// say so.
     public func refresh() async {
         let geofences = await getGeofencesCall()
         store.setGeofences(geofences)
-        _ = await deviceLink.putGeofences(geofences)
+        let pushed = await deviceLink.putGeofences(geofences)
+        LogUploader.logEvent(
+            "putGeofences",
+            message: pushed
+                ? "\(geofences.count) mirrored to console"
+                : "console not updated (\(geofences.count) local)",
+            level: pushed ? .info : .warn,
+            store: store
+        )
     }
 
     /// Add a geofence, then sync. A failed SDK call rethrows without ever

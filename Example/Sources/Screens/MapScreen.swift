@@ -436,25 +436,38 @@ public struct MapScreen: View {
             Text(appStore.link.linked ? "linked" : "not linked")
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundColor(colors.text)
+                .layoutPriority(1)
             if appStore.link.linked, let deviceId = appStore.link.deviceId {
+                // The only item here left compressible (no `layoutPriority`):
+                // when the row runs out of width the device id truncates,
+                // instead of every label wrapping mid-word onto a second line.
                 Text(String(deviceId.prefix(8)))
                     .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(colors.textDim)
+                    .truncationMode(.tail)
             }
-            Spacer()
+            Spacer(minLength: 4)
             Text("● \(appStore.status.isMoving ? "moving" : "stationary")")
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundColor(appStore.status.isMoving ? colors.successText : colors.textDim)
-            if let batteryLevel = appStore.status.batteryLevel {
+                .layoutPriority(1)
+            // `>= 0` guard, not just non-nil: the engine reports an unknown
+            // battery level as -1 (UIDevice's own sentinel, and what the
+            // simulator always returns), which rendered as "-100%".
+            if let batteryLevel = appStore.status.batteryLevel, batteryLevel >= 0 {
                 Text("\(PointFormat.roundedOrDash(batteryLevel * 100))%")
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundColor(colors.textDim)
+                    .layoutPriority(1)
             }
             Text("·").font(.system(size: 13, design: .monospaced)).foregroundColor(colors.textDim)
+                .layoutPriority(1)
             Text("\(displayPoints.count) pts\(rangeActive ? " (hist)" : "")")
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundColor(colors.warningText)
+                .layoutPriority(1)
         }
+        .lineLimit(1)
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .background(colors.panel)
@@ -536,6 +549,10 @@ public struct MapScreen: View {
                 }
             }
         }
+        // Every label in this card is a short fixed string; wrapping one of
+        // them mid-word (what happens when the row runs out of width) is never
+        // the right answer here.
+        .lineLimit(1)
         .padding(10)
         .background(colors.panel)
         .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -716,8 +733,10 @@ struct TrackMapView: UIViewRepresentable {
         // Bookkeeping for the split-rebuild below: exactly what's currently on
         // the map for each half, so each half can be torn down/rebuilt
         // independently instead of via `mapView.overlays`/`mapView.annotations`
-        // (which mix both halves together).
-        private var trackAnnotations: [MKAnnotation] = []
+        // (which mix both halves together). The track half is keyed rather
+        // than a flat list so it can be diffed — see `applyTrackDots`.
+        private var trackDotsByKey: [String: DotAnnotation] = [:]
+        private var lastAnnotation: DotAnnotation?
         private var geofencePinAnnotations: [GeofencePinAnnotation] = []
         private var polylineOverlay: MKPolyline?
         private var circleOverlays: [MKCircle] = []
@@ -849,26 +868,92 @@ struct TrackMapView: UIViewRepresentable {
             if decision.rebuildTrack {
                 lastTrackSnapshot = trackSnapshot
 
-                if let polylineOverlay {
-                    mapView.removeOverlay(polylineOverlay)
-                    self.polylineOverlay = nil
-                }
+                // Add the new polyline BEFORE removing the old one. MapKit
+                // renders overlays on its own pass, so remove-then-add leaves
+                // frames with no line drawn at all — one blink of the whole
+                // track per accepted fix, which is what "Follow" made obvious.
+                let previousPolyline = polylineOverlay
                 if polyline.count > 1 {
                     let newPolyline = MKPolyline(coordinates: polyline, count: polyline.count)
                     mapView.addOverlay(newPolyline)
                     polylineOverlay = newPolyline
+                } else {
+                    polylineOverlay = nil
+                }
+                if let previousPolyline {
+                    mapView.removeOverlay(previousPolyline)
                 }
 
-                if !trackAnnotations.isEmpty {
-                    mapView.removeAnnotations(trackAnnotations)
+                applyTrackDots(mapView: mapView, trackPoints: trackPoints, geofenceEvents: geofenceEvents)
+                applyLastAnnotation(mapView: mapView, lastPoint: lastPoint, isMoving: isMoving)
+            }
+        }
+
+        /// Diffs the track/geofence-event dots by key instead of removing all
+        /// of them and re-adding them. The old wholesale rebuild made MapKit
+        /// destroy and recreate up to `MapPaging.pageSize` annotation views on
+        /// EVERY accepted fix (each one a `UIHostingController`), which is why
+        /// the entire dot layer visibly blinked while tracking.
+        private func applyTrackDots(mapView: MKMapView, trackPoints: [Point], geofenceEvents: [(Point, String)]) {
+            var next: [String: DotAnnotation] = [:]
+            var added: [DotAnnotation] = []
+            var occurrences: [String: Int] = [:]
+
+            func put(_ base: String, _ point: Point, _ kind: DotAnnotation.Kind) {
+                // A point is keyed by `uuid` (its `timestamp` when the SDK
+                // supplied none) — neither is guaranteed unique across a
+                // window, and a collision would silently collapse two dots
+                // into one, so repeats take an occurrence suffix. Ordering is
+                // stable, so the suffix a given point gets is stable too.
+                let occurrence = (occurrences[base] ?? 0) + 1
+                occurrences[base] = occurrence
+                let key = occurrence == 1 ? base : "\(base)#\(occurrence)"
+                if let existing = trackDotsByKey[key] {
+                    next[key] = existing
+                } else {
+                    let annotation = DotAnnotation(point: point, kind: kind)
+                    next[key] = annotation
+                    added.append(annotation)
                 }
-                var newTrackAnnotations: [MKAnnotation] = trackPoints.map { DotAnnotation(point: $0, kind: .track) }
-                newTrackAnnotations += geofenceEvents.map { DotAnnotation(point: $0.0, kind: .geofenceEvent(hex: $0.1)) }
-                if let lastPoint {
-                    newTrackAnnotations.append(DotAnnotation(point: lastPoint, kind: .last(moving: isMoving)))
+            }
+
+            for point in trackPoints {
+                put("t|" + (point.uuid ?? point.timestamp), point, .track)
+            }
+            for (point, hex) in geofenceEvents {
+                put("g|" + (point.uuid ?? point.timestamp) + "|" + hex, point, .geofenceEvent(hex: hex))
+            }
+
+            let removed = trackDotsByKey.compactMap { next[$0.key] == nil ? $0.value : nil }
+            if !added.isEmpty { mapView.addAnnotations(added) }
+            if !removed.isEmpty { mapView.removeAnnotations(removed) }
+            trackDotsByKey = next
+        }
+
+        /// Keeps ONE "current position" annotation for the life of the map and
+        /// moves it, rather than removing it and adding a replacement on every
+        /// fix. `DotAnnotation.coordinate` is KVO-observable, so MapKit slides
+        /// the existing view to the new coordinate instead of tearing down and
+        /// re-hosting it (the marker's own blink).
+        private func applyLastAnnotation(mapView: MKMapView, lastPoint: Point?, isMoving: Bool) {
+            guard let lastPoint else {
+                if let lastAnnotation {
+                    mapView.removeAnnotation(lastAnnotation)
+                    self.lastAnnotation = nil
                 }
-                trackAnnotations = newTrackAnnotations
-                mapView.addAnnotations(newTrackAnnotations)
+                return
+            }
+            let kind = DotAnnotation.Kind.last(moving: isMoving)
+            if let existing = lastAnnotation {
+                existing.update(point: lastPoint, kind: kind)
+                // `viewFor` only runs for annotations MapKit is (re)creating a
+                // view for, so a moved annotation keeps its old view — the
+                // moving/stationary color has to be pushed onto it here.
+                (mapView.view(for: existing) as? DotHostingAnnotationView)?.configure(kind: kind)
+            } else {
+                let annotation = DotAnnotation(point: lastPoint, kind: kind)
+                lastAnnotation = annotation
+                mapView.addAnnotation(annotation)
             }
         }
 
@@ -940,13 +1025,23 @@ final class DotAnnotation: NSObject, MKAnnotation {
         case last(moving: Bool)
     }
 
-    let point: Point
-    let kind: Kind
-    var coordinate: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude) }
+    private(set) var point: Point
+    private(set) var kind: Kind
+    /// Stored and `@objc dynamic` rather than computed off `point`: MapKit
+    /// observes `coordinate` through KVO, and that observation is what lets
+    /// `applyLastAnnotation` move this annotation instead of replacing it.
+    @objc dynamic var coordinate: CLLocationCoordinate2D
 
     init(point: Point, kind: Kind) {
         self.point = point
         self.kind = kind
+        self.coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+    }
+
+    func update(point: Point, kind: Kind) {
+        self.point = point
+        self.kind = kind
+        coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
     }
 }
 

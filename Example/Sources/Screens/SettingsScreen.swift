@@ -310,19 +310,25 @@ private struct ConfigFieldRow: View {
     // shared, and independently testable, rather than reimplemented per view.
     private var displayString: String { ConfigCoerce.displayString(for: value) }
 
+    /// A long option row (`logLevel`'s six pills) can't share a line with the
+    /// label and its hint on a phone: the pills get squeezed to a few points
+    /// each and every label stacks one letter per line. Those get their own
+    /// full-width row under the label instead.
+    private var controlOnItsOwnRow: Bool {
+        field.type == .enumeration && (field.options?.count ?? 0) > 3
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(field.unit.map { "\(field.label) (\($0))" } ?? field.label)
-                        .font(.system(size: 13))
-                        .foregroundColor(overridden ? colors.accentText : colors.text2)
-                    if let hint = field.hint {
-                        Text(hint).font(.system(size: 11)).foregroundColor(colors.placeholder)
-                    }
+            if controlOnItsOwnRow {
+                labelColumn
+                control.padding(.top, 4)
+            } else {
+                HStack(alignment: .top, spacing: 8) {
+                    labelColumn
+                    Spacer(minLength: 8)
+                    control
                 }
-                Spacer(minLength: 8)
-                control
             }
             if let error {
                 Text(error)
@@ -331,6 +337,17 @@ private struct ConfigFieldRow: View {
             }
         }
         .padding(.vertical, 6)
+    }
+
+    private var labelColumn: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(field.unit.map { "\(field.label) (\($0))" } ?? field.label)
+                .font(.system(size: 13))
+                .foregroundColor(overridden ? colors.accentText : colors.text2)
+            if let hint = field.hint {
+                Text(hint).font(.system(size: 11)).foregroundColor(colors.placeholder)
+            }
+        }
     }
 
     @ViewBuilder private var control: some View {
@@ -415,9 +432,9 @@ private struct EnumButtonsRow<Value>: View {
     let onSelect: (Value) -> Void
 
     // A plain `HStack`, not a wrapping layout: iOS 15.5 predates SwiftUI's
-    // `Layout` protocol (needs iOS 16), and the option counts here (2-6)
-    // never overflow a settings-row width in practice, so a real wrap
-    // implementation would be unused complexity.
+    // `Layout` protocol (needs iOS 16). The row does need more width than a
+    // label can spare once there are more than three options — `ConfigFieldRow`
+    // gives those a full-width row of their own rather than wrapping here.
     var body: some View {
         HStack(spacing: 4) {
             ForEach(options.indices, id: \.self) { index in
@@ -425,6 +442,10 @@ private struct EnumButtonsRow<Value>: View {
                 let selected = isSelected(option.value)
                 Button(option.label) { onSelect(option.value) }
                     .font(.system(size: 11, weight: .semibold))
+                    // A pill label is 3-6 characters and must never wrap: with
+                    // no width to give, SwiftUI breaks it one letter per line.
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 8).padding(.vertical, 5)
                     .background(selected ? colors.accent : colors.surfaceRaised)
                     .foregroundColor(selected ? colors.onAccent : colors.textDim)
@@ -475,7 +496,7 @@ private struct StateSection: View {
 
             if let engineState {
                 ForEach(stateFields.filter { engineState[$0] != nil }, id: \.self) { key in
-                    stateRow(key, describe(engineState[key]))
+                    stateRow(key, stateValueDescription(engineState[key]))
                 }
             }
             stateRow("upload queue", "\(queueCount.map(String.init) ?? "—") records")
@@ -546,16 +567,6 @@ private struct StateSection: View {
         }
     }
 
-    private func describe(_ value: Any?) -> String {
-        switch value {
-        case let v as Bool: return v ? "true" : "false"
-        case let v as NSNumber: return v.stringValue
-        case let v as String: return v
-        case .none: return "—"
-        default: return String(describing: value!)
-        }
-    }
-
     private func refresh() async {
         async let state = BackgroundGeolocation.getState()
         async let count = BackgroundGeolocation.getCount()
@@ -605,6 +616,40 @@ private struct StateSection: View {
             busyActions.remove(key)
             await refresh()
         }
+    }
+}
+
+// MARK: - engine state formatting
+
+/// Renders one `State.raw` value for the Engine state list.
+///
+/// `NSNumber` is matched BEFORE `Bool`, and a real boolean is recognised by
+/// its CoreFoundation type rather than by a cast. Every value in `State.raw`
+/// arrives from the ObjC engine as an `NSNumber`, and `NSNumber as? Bool`
+/// succeeds for any number that happens to be 0 or 1 — so the obvious
+/// `case let v as Bool` first shipped `odometer 0` as "false",
+/// `geofenceCount 1` as "true" and `watchdogRecoveryCount 0` as "false",
+/// while `authorization 3` (not 0/1) fell through and printed correctly.
+///
+/// Free function, not a method on `StateSection`: same reasoning as
+/// `redactedAuthorizationLogData` in `BGeoExampleApp.swift` — it is reachable
+/// from the tests this way, and a formatter that silently retypes engine
+/// diagnostics is exactly the thing that needs one.
+func stateValueDescription(_ value: Any?) -> String {
+    switch value {
+    case .none:
+        return "—"
+    case let number as NSNumber:
+        if CFGetTypeID(number as CFTypeRef) == CFBooleanGetTypeID() {
+            return number.boolValue ? "true" : "false"
+        }
+        return number.stringValue
+    case let v as Bool:
+        return v ? "true" : "false"
+    case let v as String:
+        return v
+    default:
+        return String(describing: value!)
     }
 }
 

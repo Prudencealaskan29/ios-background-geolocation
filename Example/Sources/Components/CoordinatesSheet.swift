@@ -196,6 +196,7 @@ public struct CoordinatesSheet: View {
         Text(text)
             .font(.system(size: 12, design: .monospaced))
             .foregroundColor(colors.textDim)
+            .lineLimit(1)
             .frame(width: width, alignment: trailing ? .trailing : .leading)
     }
 

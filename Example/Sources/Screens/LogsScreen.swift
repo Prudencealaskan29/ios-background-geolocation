@@ -192,14 +192,25 @@ public struct LogsScreen: View {
 
     // MARK: - subviews
 
+    /// Two rows, not one. All eight chips don't fit a phone width at full
+    /// size: as one row they were squeezed until each label wrapped mid-word
+    /// ("verb / ose", "follo / w"). `LogsScreen.tsx` renders the same chips
+    /// under `flexWrap: 'wrap'`, which spills the trailing pair onto a second
+    /// line at exactly this width — iOS 15.5 has no flow layout (`Layout`
+    /// needs iOS 16), so the split that wrap produces is written out directly.
     private var header: some View {
-        HStack(spacing: 6) {
-            ForEach(LogLevelFilter.allCases, id: \.self) { option in
-                chip(option.rawValue, active: level == option) { level = option }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                ForEach(LogLevelFilter.allCases, id: \.self) { option in
+                    chip(option.rawValue, active: level == option) { level = option }
+                }
+                Spacer(minLength: 0)
             }
-            Spacer()
-            chip("follow", active: follow) { follow.toggle() }
-            chip("clear", active: false) { appStore.clearLogs() }
+            HStack(spacing: 6) {
+                chip("follow", active: follow) { follow.toggle() }
+                chip("clear", active: false) { appStore.clearLogs() }
+                Spacer(minLength: 0)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -209,6 +220,8 @@ public struct LogsScreen: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 8).padding(.vertical, 5)
         }
         .foregroundColor(active ? colors.onAccent : colors.textDim)

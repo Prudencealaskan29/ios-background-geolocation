@@ -69,6 +69,50 @@ final class GeofencesTests: XCTestCase {
         XCTAssertEqual(putGeofencesCalls.count, 0)
     }
 
+    /// The snapshot push is the only step whose failure is otherwise
+    /// invisible — the fence is still on the device and drawn on the map, the
+    /// console just never hears about it. Both outcomes are logged so the Logs
+    /// tab can answer "did my geofence reach the console?".
+
+    func testRefreshLogsThePushOutcomeWhenTheConsoleAcceptsIt() async {
+        seedLink()
+        StubURLProtocol.stub("PUT", "/device/geofences", status: 200, json: ["ok": true])
+        let geofences = Geofences(store: store, deviceLink: deviceLink)
+        geofences.getGeofencesCall = { [self.home, self.office] }
+
+        await geofences.refresh()
+
+        let line = try! XCTUnwrap(store.logs.last)
+        XCTAssertEqual(line.event, "putGeofences")
+        XCTAssertEqual(line.level, .info)
+        XCTAssertEqual(line.message, "2 mirrored to console")
+    }
+
+    func testRefreshLogsAWarningWhenTheSnapshotNeverReachesTheConsole() async {
+        // Not linked: `putGeofences` short-circuits without a request.
+        let geofences = Geofences(store: store, deviceLink: deviceLink)
+        geofences.getGeofencesCall = { [self.home] }
+
+        await geofences.refresh()
+
+        let line = try! XCTUnwrap(store.logs.last)
+        XCTAssertEqual(line.event, "putGeofences")
+        XCTAssertEqual(line.level, .warn, "a snapshot the console never received must not log as success")
+        XCTAssertEqual(line.message, "console not updated (1 local)")
+    }
+
+    func testRefreshLogsAWarningWhenTheConsoleRejectsThePush() async {
+        seedLink()
+        StubURLProtocol.stub("PUT", "/device/geofences", status: 500, json: ["error": "boom"])
+        let geofences = Geofences(store: store, deviceLink: deviceLink)
+        geofences.getGeofencesCall = { [self.home] }
+
+        await geofences.refresh()
+
+        XCTAssertEqual(putGeofencesCalls.count, 1)
+        XCTAssertEqual(store.logs.last?.level, .warn)
+    }
+
     // MARK: - add()
 
     func testAddCallsSdkThenPushesSnapshot() async throws {
