@@ -1,5 +1,7 @@
 # BackgroundGeolocation
 
+[![spm](https://img.shields.io/github/v/tag/dc-bgeo/ios-background-geolocation?label=spm&color=blue)](https://github.com/dc-bgeo/ios-background-geolocation/releases)
+
 An open Swift facade over the closed-source BGeo background-geolocation engine.
 The engine itself ships as a prebuilt binary vendored at
 `Frameworks/BGeoCore.xcframework`; this package is pure Swift, async/await
