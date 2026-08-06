@@ -10,19 +10,34 @@ developer moving between BGeo SDKs finds the same method and event names.
 
 ### Swift Package Manager
 
-This package currently vendors `BGeoCore.xcframework` via a **local path**
-binary target (see `Package.swift`). Point your app at this checkout directly:
+In Xcode: **File → Add Package Dependencies…**, then
 
-```swift
-.package(path: "../path/to/bgeo/ios")
+```
+https://github.com/dc-bgeo/ios-background-geolocation
 ```
 
-A remote `binaryTarget` URL + checksum (so apps can depend on a tagged
-release without a local checkout) lands in phase 2.
+Or in a `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/dc-bgeo/ios-background-geolocation", from: "0.1.0"),
+],
+targets: [
+    .target(name: "YourApp", dependencies: [
+        .product(name: "BackgroundGeolocation", package: "ios-background-geolocation"),
+    ]),
+]
+```
+
+The closed engine (`BGeoCore.xcframework`) is vendored in this repository, so
+there is nothing else to download, no checksum to keep in step, and no release
+asset that can go missing years from now. It costs roughly 0.9 MB of git
+history per engine release — a deliberate trade for the simplest possible
+consumer story. Full documentation: <https://bgeo.dev/docs/>.
 
 ### CocoaPods
 
-Not yet available. A podspec is planned for phase 2.
+Not available. Use SwiftPM.
 
 ## Info.plist requirements
 

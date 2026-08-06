@@ -1,0 +1,86 @@
+# Builds and tests the package on every push and pull request, and on the
+# version tags that are what "publishing" means for SwiftPM: a consumer
+# resolves `from: "0.1.0"` straight out of this repository's git tags, so a
+# tag IS the release. There is no registry step to add here.
+#
+# Two things follow from that, and this workflow exists to enforce them:
+#
+#   1. A tag that does not build is a broken release for everyone who resolves
+#      it, and it cannot be quietly fixed — moving a published tag breaks
+#      checkouts that already pinned it. A red run on a tag means "publish a
+#      patch version", never "re-point the tag".
+#   2. The engine binary is vendored, so a green run also proves the
+#      xcframework in the tree is the one the facade compiles against.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The package is iOS-only (`platforms: [.iOS(.v15)]`), so `swift test` on a
+    # Linux runner cannot build it at all — it needs Xcode and a simulator.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Environment
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep -E '^ +iPhone' || true
+
+      # The device is chosen at runtime rather than pinned by name: runner
+      # images change their bundled Xcode (and therefore their simulator list)
+      # without warning, and a hard-coded "iPhone 16" turns that into a red
+      # build that has nothing to do with this package.
+      - name: Test
+        run: |
+          UDID=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone .*\(' | grep -oE '[0-9A-F-]{36}')
+          [ -n "$UDID" ] || { echo "::error::no iPhone simulator on this runner"; exit 1; }
+          echo "simulator: $UDID"
+
+          # Full output to a file, summary to the log. `-quiet` was tried and
+          # rejected: it leaves five lines that say nothing about whether any
+          # test ran, so a suite that silently executed zero tests would look
+          # exactly like a green one.
+          status=0
+          xcodebuild test -scheme BackgroundGeolocation -destination "id=$UDID" \
+            > "$RUNNER_TEMP/test.log" 2>&1 || status=$?
+          grep -E 'Executed [0-9]+ tests' "$RUNNER_TEMP/test.log" | tail -2
+          if [ "$status" -ne 0 ]; then
+            echo "::group::xcodebuild output"
+            tail -200 "$RUNNER_TEMP/test.log"
+            echo "::endgroup::"
+            exit "$status"
+          fi
+          grep -q 'Executed [0-9]* tests' "$RUNNER_TEMP/test.log" || {
+            echo "::error::xcodebuild reported success but ran no tests"
+            exit 1
+          }
+
+      # The example app is the console the SDK is developed against. Building
+      # it catches a facade change that compiles in isolation but breaks a real
+      # consumer's call sites — the tests exercise the types, this exercises
+      # the way an app actually uses them.
+      - name: Build the example app
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          (cd Example && xcodegen generate)
+          UDID=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone .*\(' | grep -oE '[0-9A-F-]{36}')
+          status=0
+          xcodebuild build -project Example/BGeoExample.xcodeproj -scheme BGeoExample \
+            -destination "id=$UDID" > "$RUNNER_TEMP/example.log" 2>&1 || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::group::xcodebuild output"
+            tail -200 "$RUNNER_TEMP/example.log"
+            echo "::endgroup::"
+            exit "$status"
+          fi
+          echo "example app builds"
