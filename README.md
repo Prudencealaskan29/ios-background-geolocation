@@ -35,6 +35,23 @@ asset that can go missing years from now. It costs roughly 0.9 MB of git
 history per engine release — a deliberate trade for the simplest possible
 consumer story. Full documentation: <https://bgeo.dev/docs/>.
 
+### Toolchain requirement
+
+**Xcode 26.6 or newer** (Swift 6.3.3+). This is not a style preference: the
+engine ships as a binary framework, and a `.swiftinterface` can only be read by
+a compiler at least as new as the one that produced it. An older Xcode fails to
+import `BGeoCore` with an interface-parse error rather than anything that names
+the real cause.
+
+The floor moves with each engine release — it is whatever Xcode built the
+binary. `Frameworks/BGeoCore.xcframework/*/Modules/*.swiftmodule/*.swiftinterface`
+records it on the `swift-compiler-version` line, and CI checks it explicitly.
+
+If that floor is too high for your team, the [React Native](https://bgeo.dev/docs/react-native/)
+and [Flutter](https://bgeo.dev/docs/flutter/) SDKs ship the same engine and are
+not affected — their binary is consumed through a bridge built against your own
+toolchain.
+
 ### CocoaPods
 
 Not available. Use SwiftPM.

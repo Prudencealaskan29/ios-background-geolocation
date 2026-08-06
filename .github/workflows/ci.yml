@@ -27,14 +27,39 @@ jobs:
   test:
     # The package is iOS-only (`platforms: [.iOS(.v15)]`), so `swift test` on a
     # Linux runner cannot build it at all — it needs Xcode and a simulator.
-    runs-on: macos-15
+    #
+    # The image also has to be new enough for the engine binary: a
+    # `.swiftinterface` can only be read by a Swift compiler at least as new as
+    # the one that wrote it, and BGeoCore.xcframework is built with whatever
+    # Xcode cut the release. macos-15 (Xcode 16) failed for exactly that reason
+    # — see the toolchain guard below, which turns that into one readable line
+    # instead of an interface-parse error a hundred lines deep.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
       - name: Environment
         run: |
           xcodebuild -version
+          swift --version
           xcrun simctl list devices available | grep -E '^ +iPhone' || true
+
+      # The engine is a binary framework: its .swiftinterface records the
+      # compiler that produced it, and any older compiler refuses to import it.
+      # That is a real constraint on consumers too, so it is stated in the
+      # README — this step makes a violation of it obvious here rather than
+      # letting it surface as an unexplained build failure.
+      - name: Toolchain is new enough for the engine binary
+        run: |
+          interface=$(find Frameworks -name '*.swiftinterface' | head -1)
+          required=$(sed -n 's/.*Apple Swift version \([0-9.]*\).*/\1/p' "$interface" | head -1)
+          have=$(swift --version 2>&1 | sed -n 's/.*Apple Swift version \([0-9.]*\).*/\1/p' | head -1)
+          echo "engine built with Swift $required; runner has Swift $have"
+          oldest=$(printf '%s\n%s\n' "$required" "$have" | sort -V | head -1)
+          [ "$oldest" = "$required" ] || {
+            echo "::error::this runner's Swift ($have) is older than the engine binary's ($required) — it cannot import BGeoCore"
+            exit 1
+          }
 
       # The device is chosen at runtime rather than pinned by name: runner
       # images change their bundled Xcode (and therefore their simulator list)
