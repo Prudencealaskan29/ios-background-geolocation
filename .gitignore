@@ -4,3 +4,4 @@ DerivedData/
 *.xcuserstate
 .DS_Store
 Example/BGeoExample.xcodeproj/xcuserdata/
+.superpowers/
