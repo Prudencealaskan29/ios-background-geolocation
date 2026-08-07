@@ -169,3 +169,12 @@ xcodebuild test -scheme BackgroundGeolocation \
 
 (Substitute whatever simulator you have installed — `xcrun simctl list
 devices available` shows your options.)
+
+## License
+
+The Swift facade (`Sources/`, `Tests/`, `Package.swift`, `Example/`) is
+**MIT** — see [`LICENSE`](./LICENSE).
+
+The precompiled engine (`Frameworks/BGeoCore.xcframework`) is **proprietary**
+and requires a license key in release builds — see
+[`LICENSE-BINARY.md`](./LICENSE-BINARY.md).
