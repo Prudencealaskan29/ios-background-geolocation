@@ -7,11 +7,17 @@ import CoreLocation
 import CryptoKit
 import Foundation
 import Swift
+import UIKit
 import _Concurrency
 import _StringProcessing
 import _SwiftConcurrencyShims
 @_inheritsConvenienceInitializers @objc(BGGeoLicense) final public class BGGeoLicense : ObjectiveC.NSObject {
   @objc public static func check(token: Swift.String?, bundleId: Swift.String, teamId: Swift.String?, isDevelopmentBuild: Swift.Bool, sdkBuildDate: Swift.Int64) -> Swift.String?
+  @objc override dynamic public init()
+  @objc deinit
+}
+@_inheritsConvenienceInitializers @objc(BGGeoLicenseBanner) final public class BGGeoLicenseBanner : ObjectiveC.NSObject {
+  @objc public static func show(code: Swift.String)
   @objc override dynamic public init()
   @objc deinit
 }

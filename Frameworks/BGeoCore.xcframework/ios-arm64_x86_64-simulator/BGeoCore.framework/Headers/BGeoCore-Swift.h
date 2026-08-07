@@ -384,6 +384,21 @@ SWIFT_CLASS_NAMED("BGGeoLicense")
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
 @end
 
+/// Persistent on-screen banner shown when the license gate rejects a release
+/// build (LICENSE_MISSING / INVALID / EXPIRED / APP_MISMATCH). Tracking is
+/// silently blocked in that state, which is invisible during release testing —
+/// the banner makes it impossible to miss (Transistorsoft-style).
+/// Rendered in a dedicated UIWindow sized exactly to the banner at the bottom
+/// of the active scene, above alerts — touches outside it are untouched.
+/// Development/simulator builds never reach here (they degrade to evaluation),
+/// and background/headless launches show nothing until the app becomes active.
+SWIFT_CLASS_NAMED("BGGeoLicenseBanner")
+@interface BGGeoLicenseBanner : NSObject
+/// Idempotent; safe to call from any thread.
++ (void)showWithCode:(NSString * _Nonnull)code;
+- (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
+@end
+
 @class CLLocation;
 SWIFT_CLASS_NAMED("BGGeoSessionStream")
 @interface BGGeoSessionStream : NSObject
@@ -790,6 +805,21 @@ SWIFT_CLASS_NAMED("BGGeoLicense")
 /// Returns nil when licensed (or debuggable evaluation); otherwise a LICENSE_*
 /// error code. <code>teamId</code> is nil on the simulator / when unavailable.
 + (NSString * _Nullable)checkWithToken:(NSString * _Nullable)token bundleId:(NSString * _Nonnull)bundleId teamId:(NSString * _Nullable)teamId isDevelopmentBuild:(BOOL)isDevelopmentBuild sdkBuildDate:(int64_t)sdkBuildDate SWIFT_WARN_UNUSED_RESULT;
+- (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
+@end
+
+/// Persistent on-screen banner shown when the license gate rejects a release
+/// build (LICENSE_MISSING / INVALID / EXPIRED / APP_MISMATCH). Tracking is
+/// silently blocked in that state, which is invisible during release testing —
+/// the banner makes it impossible to miss (Transistorsoft-style).
+/// Rendered in a dedicated UIWindow sized exactly to the banner at the bottom
+/// of the active scene, above alerts — touches outside it are untouched.
+/// Development/simulator builds never reach here (they degrade to evaluation),
+/// and background/headless launches show nothing until the app becomes active.
+SWIFT_CLASS_NAMED("BGGeoLicenseBanner")
+@interface BGGeoLicenseBanner : NSObject
+/// Idempotent; safe to call from any thread.
++ (void)showWithCode:(NSString * _Nonnull)code;
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
 @end
 
